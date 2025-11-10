@@ -34,13 +34,15 @@ export async function planRoutesFromOverpassData(overpassJson, inputs) {
   if (!start) return { routes: [], debug: { reason: "no-start" } };
 
   // Anker wählen
-  const anchors = pickAnchors(graph, start, targetMeters, { sectors: 24, annulus: [0.35, 0.65] });
+    const anchors = pickAnchors(graph, start, targetMeters, { sectors: 12, annulus: [0.40, 0.60] });
   if (!anchors.length) return { routes: [], debug: { reason: "no-anchors" } };
 
   // Kandidaten aufbauen (nur Loop hier)
   const candidates = [];
   for (let i = 0; i < anchors.length; i++) {
     for (let j = i+1; j < anchors.length; j++) {
+        // frühe Limitierung, maximal ~40 Paare
+        if ((j - i) > 6) break;
       const A = anchors[i], B = anchors[j];
       const edges = buildLoopCandidate(graph, start.id, A.id, B.id, prefs, alpha, 0.5);
       if (!edges) continue;

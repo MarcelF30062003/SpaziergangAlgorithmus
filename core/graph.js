@@ -23,9 +23,12 @@ export function buildGraph(overpassJson) {
   const walkable = wayGeoms.filter(w => {
     const h = w.tags.highway;
     const foot = w.tags.foot;
-    const walkCls = h && /^(footway|path|residential|living_street|pedestrian)$/.test(h);
+    const walkCls = h && /^(footway|path|living_street|pedestrian)$/.test(h);
+    // Optional: residential nur, wenn sidewalk existiert:
+      const residentialOk = h === "residential" && (w.tags.sidewalk || w.tags.foot === "designated");
+      const walkableClass = walkCls || residentialOk;
     const notForbidden = foot !== "no";
-    return walkCls && notForbidden && w.nodes.length >= 2;
+    return walkableClass && notForbidden && w.nodes.length >= 2;
   });
 
   // Grün/Wasser-Flächen/Wege (als Nähe-Referenz)
@@ -143,5 +146,14 @@ export function buildGraph(overpassJson) {
     e.feat = { surface: surf, quiet, green, water, poi, slope };
   }
 
-  return { nodes, edges, adj };
+    // --- NEU: Features in die rückwärts-Kanten spiegeln ---
+    const featById = new Map(edges.map(e => [e.id, e.feat]));
+    for (const list of adj.values()) {
+        for (let i = 0; i < list.length; i++) {
+            const ref = list[i];
+            if (!ref.feat) ref.feat = featById.get(ref.id);
+        }
+    }
+
+    return { nodes, edges, adj };
 }
