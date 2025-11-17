@@ -33,7 +33,7 @@ export class Runner {
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
 
-    const desiredDistance = 10000; // 3 km Spaziergang
+    const desiredDistance = 3000; // 3 km Spaziergang
 
     const params = {lat: 51.7189, lon: 8.7575, radius: 2000};
 
