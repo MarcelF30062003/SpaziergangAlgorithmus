@@ -190,34 +190,25 @@ export class GraphService {
   }
 
 
-  combineRoutes(out: RouteResult, back: RouteResult): RouteResult {
-    // 1. Nodes zusammenführen (aber nicht doppelt)
+  combineRoutes(out: RouteResult | null, back: RouteResult | null): RouteResult | null {
+    if (!out || !back) {
+      console.warn('combineRoutes: one of the routes is null', { out, back });
+      return null;
+    }
+
     const nodes = [...out.nodes];
-
-    // Back-Route fängt beim Anker an, endet beim Start.
-    // Der erste Node der Rückroute ist derselbe wie der letzte der Hinroute → überspringen.
     const backNodes = back.nodes.slice(1);
-
     nodes.push(...backNodes);
 
-    // 2. Edges zusammenführen (keine Duplikate)
     const edges = [...out.edges, ...back.edges];
-
-    // 3. Polyline zusammenführen (auch hier den 1. Punkt der Rückroute skippen)
     const polyline: [number, number][] = [
       ...out.polyline,
       ...back.polyline.slice(1),
     ];
 
-    // 4. Gesamtkosten berechnen
     const totalCost = out.totalCost + back.totalCost;
 
-    return {
-      nodes,
-      edges,
-      polyline,
-      totalCost,
-    };
+    return { nodes, edges, polyline, totalCost };
   }
 
   getReachableNodeIds(graph: Graph, startId: string): string[] {

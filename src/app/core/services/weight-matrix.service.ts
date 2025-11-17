@@ -15,7 +15,7 @@ export class WeightMatrixService {
   }
 
   getDefault(): WeightMatrix {
-    return WEIGHT_MATRICES[0];
+    return WEIGHT_MATRICES[1];
   }
 
   cloneWeights(weights: WeightConfig): WeightConfig {
