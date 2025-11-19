@@ -38,7 +38,7 @@ export class Map implements AfterViewInit, OnChanges {
 
   private initMap(): void {
     this.map = L.map(this.mapContainer.nativeElement, {
-      center: [51.7189, 8.7575],
+      center: [40.7829, -73.9654], // Central Park
       zoom: 14,
     });
 
