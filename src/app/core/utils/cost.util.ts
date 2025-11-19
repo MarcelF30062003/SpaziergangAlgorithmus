@@ -296,3 +296,86 @@ function slipRiskScoreFromTags(edge: GraphEdge): number {
 
   return 0.6;
 }
+
+export function edgeBaseCostForSA(edge: GraphEdge, weights: WeightConfig): number {
+  const d = edge.distance || 0;
+
+  // Wir sammeln alle "Straf-Faktoren" (0 = gut, hoch = schlecht)
+  // Anstatt sie direkt auf die Distanz zu addieren, summieren wir sie erst.
+  let penaltySum = 0;
+
+  // Fußgängerfreundliche Wege
+  const pedScore = pedestrianFriendlyScore(edge);
+  penaltySum += (1 - pedScore) * weights.pedestrianFriendly;
+
+  // Wegbreite
+  const widthScore = pathWidthScore(edge);
+  penaltySum += (1 - widthScore) * weights.pathWidth;
+
+  // Linienführung
+  const curvatureScore = curvatureScorePlaceholder(edge);
+  penaltySum += (1 - curvatureScore) * weights.pathCurvature;
+
+  // Überholmöglichkeiten
+  const overtakeScore = overtakeScoreFromTags(edge);
+  penaltySum += (1 - overtakeScore) * weights.overtakeOptions;
+
+  // Baumdichte / Schatten
+  const shadeScore = shadeScoreFromTags(edge);
+  penaltySum += (1 - shadeScore) * weights.treeShade;
+
+  // Vegetationsbasierte Schalldämpfung
+  const vegNoiseScore = vegetationNoiseScoreFromTags(edge);
+  penaltySum += (1 - vegNoiseScore) * weights.vegetationNoiseDampening;
+
+  // Licht- und Schattenwirkung
+  const lightShadowScore = lightShadowScoreFromTags(edge);
+  penaltySum += (1 - lightShadowScore) * weights.lightShadow;
+
+  // Sitzgelegenheiten
+  const seatingScore = seatingScoreFromTags(edge);
+  penaltySum += (1 - seatingScore) * weights.seating;
+
+  // Wetterschutz
+  const shelterScore = shelterScoreFromTags(edge);
+  penaltySum += (1 - shelterScore) * weights.shelter;
+
+  // Sichere Querungen
+  const crossingScore = safeCrossingScoreFromTags(edge);
+  penaltySum += (1 - crossingScore) * weights.safeCrossings;
+
+  // Maximale Steigung
+  const slopeScore = slopeScoreFromTags(edge);
+  penaltySum += (1 - slopeScore) * weights.maxSlope;
+
+  // Jahreszeitliche Wirkung
+  const seasonalScore = seasonalVegetationScoreFromTags(edge);
+  penaltySum += (1 - seasonalScore) * weights.seasonalVegetation;
+
+  // Blickfenster
+  const viewScore = viewWindowScoreFromTags(edge);
+  penaltySum += (1 - viewScore) * weights.viewWindows;
+
+  // Schwierigkeit
+  const difficultyScore = difficultyScoreFromTags(edge);
+  penaltySum += (1 - difficultyScore) * weights.difficulty;
+
+  // Rutschrisiko
+  const slipScore = slipRiskScoreFromTags(edge);
+  penaltySum += (1 - slipScore) * weights.slipRisk;
+
+
+  // --- FIX ---
+  // Wir dämpfen den Einfluss der Kriterien massiv.
+  // Impact Factor 0.1 bedeutet: Selbst wenn ALLE Kriterien schlecht sind
+  // (angenommen penaltySum ist ~10), erhöhen sich die Kosten nur um
+  // Faktor (1 + 10 * 0.1) = 2.
+  // Der Weg wirkt also maximal doppelt so lang, aber nicht 11-mal so lang.
+
+  const IMPACT_FACTOR = 0.1;
+
+  // Kosten = Distanz * (1 + etwas Aufschlag für schlechte Qualität)
+  const totalCost = d * (1 + (penaltySum * IMPACT_FACTOR));
+
+  return totalCost;
+}

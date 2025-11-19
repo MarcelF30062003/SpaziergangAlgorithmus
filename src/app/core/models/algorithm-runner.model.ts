@@ -12,6 +12,7 @@ export interface AlgorithmRunner {
     graph: Graph,
     startId: string,
     targetId: string,
-    weights: WeightConfig
+    weights: WeightConfig,
+    avoidEdges?: Set<string>
   ): RouteResult | null;
 }
