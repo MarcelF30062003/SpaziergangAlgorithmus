@@ -136,7 +136,8 @@ export class GraphService {
     graph: Graph,
     startId: string,
     desiredDistance: number,
-    tolerance: number = 0.25
+    tolerance: number = 0.25,
+    factor?: number
   ): string | null {
     const start = graph.nodes[startId];
     if (!start) return null;
@@ -147,7 +148,15 @@ export class GraphService {
       return null;
     }
 
-    const targetDist = desiredDistance * 0.5;
+    let targetDist
+
+    if(factor){
+      targetDist = (desiredDistance * 0.5) / factor;
+    }
+    else {
+      targetDist = desiredDistance * 0.5;
+    }
+
     const minDist = targetDist * (1 - tolerance);
     const maxDist = targetDist * (1 + tolerance);
 
@@ -207,8 +216,9 @@ export class GraphService {
     ];
 
     const totalCost = out.totalCost + back.totalCost;
+    const totalDistance = (out.totalDistance || 0) + (back.totalDistance || 0); // NEU
 
-    return { nodes, edges, polyline, totalCost };
+    return { nodes, edges, polyline, totalCost, totalDistance };
   }
 
   getReachableNodeIds(graph: Graph, startId: string): string[] {

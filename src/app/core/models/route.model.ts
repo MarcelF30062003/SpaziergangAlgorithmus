@@ -5,6 +5,7 @@ import { GraphEdge, GraphNode } from './graph.model';
 export interface RouteResult {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  polyline: [number, number][]; // [lat, lon] – direkt für Leaflet
+  polyline: [number, number][];
   totalCost: number;
+  totalDistance?: number; // NEU: Echte Länge in Metern
 }

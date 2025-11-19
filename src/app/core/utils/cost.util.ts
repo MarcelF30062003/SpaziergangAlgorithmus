@@ -85,7 +85,7 @@ export function edgeBaseCost(edge: GraphEdge, weights: WeightConfig): number {
 // Heuristiken pro Kriterium
 // ----------------------
 
-function pedestrianFriendlyScore(edge: GraphEdge): number {
+export function pedestrianFriendlyScore(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.5;
 
@@ -96,7 +96,7 @@ function pedestrianFriendlyScore(edge: GraphEdge): number {
   return 0.5;
 }
 
-function pathWidthScore(edge: GraphEdge): number {
+export function pathWidthScore(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.5;
 
@@ -114,11 +114,11 @@ function pathWidthScore(edge: GraphEdge): number {
 
 // Platzhalter, da echte Linienführung Segmentketten benötigt.
 // Ihr könnt das später ersetzen durch z.B. Kurvenanalyse des Ways.
-function curvatureScorePlaceholder(_edge: GraphEdge): number {
+export function curvatureScorePlaceholder(_edge: GraphEdge): number {
   return 0.5;
 }
 
-function overtakeScoreFromTags(edge: GraphEdge): number {
+export function overtakeScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.4;
 
@@ -139,7 +139,7 @@ function overtakeScoreFromTags(edge: GraphEdge): number {
   return 0.4;
 }
 
-function shadeScoreFromTags(edge: GraphEdge): number {
+export function shadeScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.2;
 
@@ -149,7 +149,7 @@ function shadeScoreFromTags(edge: GraphEdge): number {
   return 0.2;
 }
 
-function vegetationNoiseScoreFromTags(edge: GraphEdge): number {
+export function vegetationNoiseScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.3;
 
@@ -160,7 +160,7 @@ function vegetationNoiseScoreFromTags(edge: GraphEdge): number {
   return 0.3;
 }
 
-function lightShadowScoreFromTags(edge: GraphEdge): number {
+export function lightShadowScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.5;
 
@@ -175,7 +175,7 @@ function lightShadowScoreFromTags(edge: GraphEdge): number {
   return 0.5;
 }
 
-function seatingScoreFromTags(edge: GraphEdge): number {
+export function seatingScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.2;
 
@@ -183,7 +183,7 @@ function seatingScoreFromTags(edge: GraphEdge): number {
   return 0.2;
 }
 
-function shelterScoreFromTags(edge: GraphEdge): number {
+export function shelterScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.2;
 
@@ -191,7 +191,7 @@ function shelterScoreFromTags(edge: GraphEdge): number {
   return 0.2;
 }
 
-function safeCrossingScoreFromTags(edge: GraphEdge): number {
+export function safeCrossingScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.5;
 
@@ -204,7 +204,7 @@ function safeCrossingScoreFromTags(edge: GraphEdge): number {
   return 0.5;
 }
 
-function slopeScoreFromTags(edge: GraphEdge): number {
+export function slopeScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.7;
 
@@ -222,7 +222,7 @@ function slopeScoreFromTags(edge: GraphEdge): number {
   return 0.3;
 }
 
-function seasonalVegetationScoreFromTags(edge: GraphEdge): number {
+export function seasonalVegetationScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.4;
 
@@ -233,7 +233,7 @@ function seasonalVegetationScoreFromTags(edge: GraphEdge): number {
   return 0.4;
 }
 
-function viewWindowScoreFromTags(edge: GraphEdge): number {
+export function viewWindowScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.4;
 
@@ -244,7 +244,7 @@ function viewWindowScoreFromTags(edge: GraphEdge): number {
   return 0.4;
 }
 
-function difficultyScoreFromTags(edge: GraphEdge): number {
+export function difficultyScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.7;
 
@@ -272,7 +272,7 @@ function difficultyScoreFromTags(edge: GraphEdge): number {
   return 0.7;
 }
 
-function slipRiskScoreFromTags(edge: GraphEdge): number {
+export function slipRiskScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.6;
 
@@ -295,4 +295,87 @@ function slipRiskScoreFromTags(edge: GraphEdge): number {
   }
 
   return 0.6;
+}
+
+export function edgeBaseCostForSA(edge: GraphEdge, weights: WeightConfig): number {
+  const d = edge.distance || 0;
+
+  // Wir sammeln alle "Straf-Faktoren" (0 = gut, hoch = schlecht)
+  // Anstatt sie direkt auf die Distanz zu addieren, summieren wir sie erst.
+  let penaltySum = 0;
+
+  // Fußgängerfreundliche Wege
+  const pedScore = pedestrianFriendlyScore(edge);
+  penaltySum += (1 - pedScore) * weights.pedestrianFriendly;
+
+  // Wegbreite
+  const widthScore = pathWidthScore(edge);
+  penaltySum += (1 - widthScore) * weights.pathWidth;
+
+  // Linienführung
+  const curvatureScore = curvatureScorePlaceholder(edge);
+  penaltySum += (1 - curvatureScore) * weights.pathCurvature;
+
+  // Überholmöglichkeiten
+  const overtakeScore = overtakeScoreFromTags(edge);
+  penaltySum += (1 - overtakeScore) * weights.overtakeOptions;
+
+  // Baumdichte / Schatten
+  const shadeScore = shadeScoreFromTags(edge);
+  penaltySum += (1 - shadeScore) * weights.treeShade;
+
+  // Vegetationsbasierte Schalldämpfung
+  const vegNoiseScore = vegetationNoiseScoreFromTags(edge);
+  penaltySum += (1 - vegNoiseScore) * weights.vegetationNoiseDampening;
+
+  // Licht- und Schattenwirkung
+  const lightShadowScore = lightShadowScoreFromTags(edge);
+  penaltySum += (1 - lightShadowScore) * weights.lightShadow;
+
+  // Sitzgelegenheiten
+  const seatingScore = seatingScoreFromTags(edge);
+  penaltySum += (1 - seatingScore) * weights.seating;
+
+  // Wetterschutz
+  const shelterScore = shelterScoreFromTags(edge);
+  penaltySum += (1 - shelterScore) * weights.shelter;
+
+  // Sichere Querungen
+  const crossingScore = safeCrossingScoreFromTags(edge);
+  penaltySum += (1 - crossingScore) * weights.safeCrossings;
+
+  // Maximale Steigung
+  const slopeScore = slopeScoreFromTags(edge);
+  penaltySum += (1 - slopeScore) * weights.maxSlope;
+
+  // Jahreszeitliche Wirkung
+  const seasonalScore = seasonalVegetationScoreFromTags(edge);
+  penaltySum += (1 - seasonalScore) * weights.seasonalVegetation;
+
+  // Blickfenster
+  const viewScore = viewWindowScoreFromTags(edge);
+  penaltySum += (1 - viewScore) * weights.viewWindows;
+
+  // Schwierigkeit
+  const difficultyScore = difficultyScoreFromTags(edge);
+  penaltySum += (1 - difficultyScore) * weights.difficulty;
+
+  // Rutschrisiko
+  const slipScore = slipRiskScoreFromTags(edge);
+  penaltySum += (1 - slipScore) * weights.slipRisk;
+
+
+  // --- FIX ---
+  // Wir dämpfen den Einfluss der Kriterien massiv.
+  // Impact Factor 0.1 bedeutet: Selbst wenn ALLE Kriterien schlecht sind
+  // (angenommen penaltySum ist ~10), erhöhen sich die Kosten nur um
+  // Faktor (1 + 10 * 0.1) = 2.
+  // Der Weg wirkt also maximal doppelt so lang, aber nicht 11-mal so lang.
+
+  const IMPACT_FACTOR = 0.1;
+
+  // Kosten = Distanz * (1 + etwas Aufschlag für schlechte Qualität)
+  const totalCost = d * (1 + (penaltySum * IMPACT_FACTOR));
+
+  return totalCost;
 }

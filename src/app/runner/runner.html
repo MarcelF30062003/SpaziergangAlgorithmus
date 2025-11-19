@@ -1,4 +1,5 @@
 <button (click)="runGreedy()">Greedy Best-First starten</button>
 <button (click)="runBeam()">Beam Search starten</button>
-
-  <app-map [route]="currentRoute"></app-map>
+<button (click)="runSA()">Simulated Annealing starten</button>
+<button (click)="runACO()">Ant Colony Optimization starten</button>
+  <app-map [route]="currentRoute" [startNode]="currentStartNode"></app-map>
