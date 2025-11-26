@@ -264,7 +264,7 @@ export class Runner {
 
     // Hier verwende ich deine Paderborn-Koordinaten aus den anderen Methoden,
     // passe dies ggf. an, wenn du New York (Central Park) nutzen willst.
-    const params = { lat: 51.7189, lon: 8.7575, radius: 2000 };
+    const params = { lat: 40.7829, lon: -73.9654, radius: desiredDistance };
 
     this.osmService.fetchGraph(params).subscribe(graph => {
       const startId = this.graphService.findNearestNode(graph, params.lat, params.lon);
