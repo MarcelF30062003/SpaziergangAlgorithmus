@@ -110,7 +110,8 @@ export class RoundPathService {
   }
 
   /**
-   * Sucht einen Knoten, der seitlich zu Start->Anchor1 liegt.
+   * Verbesserte Anker-Suche:
+   * Sucht einen Knoten, der ein möglichst gleichseitiges Dreieck aufspannt.
    */
   private findSideAnchor(
     graph: Graph,
@@ -133,14 +134,22 @@ export class RoundPathService {
 
       const n = graph.nodes[id];
 
-      const d = haversineDistance(start.lat, start.lon, n.lat, n.lon);
-      if (d < targetMin || d > targetMax) continue;
+      // 1. Prüfung: Distanz zum Start (Radius)
+      const distToStart = haversineDistance(start.lat, start.lon, n.lat, n.lon);
+      if (distToStart < targetMin || distToStart > targetMax) continue;
 
-      // Winkel berechnen
+      // 2. NEUE Prüfung: Distanz zum ersten Anker (Schenkelweite)
+      // Wir wollen vermeiden, dass Anker 2 direkt neben Anker 1 liegt.
+      const distToAnchor1 = haversineDistance(anchor1.lat, anchor1.lon, n.lat, n.lon);
+      if (distToAnchor1 < targetMin * 0.8) continue; // Mindestabstand zwischen Ankern erzwingen
+
+      // Score berechnen: Kombination aus Winkel und idealer Distanz
       const angle = this.sideAngle(start, anchor1, n);
 
-      // Score = möglichst großer Winkel (max ~180 Grad / PI)
-      // Wir bevorzugen Punkte, die "weit weg" von der Linie Start-Anchor1 sind
+      // Wir bevorzugen Winkel um ~60-90 Grad (ca. 1.0 - 1.5 rad) für weite Runden
+      // Zu kleine Winkel (< 30 Grad) bestrafen
+      if (angle < 0.5) continue;
+
       if (angle > bestScore) {
         bestScore = angle;
         bestNode = id;

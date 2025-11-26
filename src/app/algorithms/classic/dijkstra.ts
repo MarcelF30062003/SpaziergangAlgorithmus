@@ -2,22 +2,18 @@
 
 import { Injectable } from '@angular/core';
 import { AlgorithmRunner } from '../../core/models/algorithm-runner.model';
-import { Graph } from '../../core/models/graph.model';
+import { Graph, GraphNode } from '../../core/models/graph.model';
 import { WeightConfig } from '../../core/models/weight.model';
 import { RouteResult } from '../../core/models/route.model';
 import { edgeBaseCost } from '../../core/utils/cost.util';
-
-interface QueueEntry {
-  nodeId: string;
-  cost: number;
-}
+import { PriorityQueue } from '../../core/utils/priority-queue'; // Importieren!
 
 @Injectable({
   providedIn: 'root'
 })
 export class DijkstraRunner implements AlgorithmRunner {
-  id: string = "dijkstra";
-  name: string = "dijkstra";
+  id = 'dijkstra';
+  name = 'Dijkstra (Optimiert)';
 
   run(
     graph: Graph,
@@ -27,37 +23,34 @@ export class DijkstraRunner implements AlgorithmRunner {
   ): RouteResult | null {
 
     if (!graph.nodes[startId] || !graph.nodes[targetId]) {
-      console.warn('DijkstraRunner: invalid start/target');
       return null;
     }
 
-    const dist: Record<string, number> = {};
-    const prev: Record<string, string | null> = {};
+    // Optimierung: Map statt Record für schnellere Zugriffe bei vielen Knoten
+    const dist = new Map<string, number>();
+    const prev = new Map<string, string | null>();
     const visited = new Set<string>();
 
-    // Initialisierung
-    Object.keys(graph.nodes).forEach(id => {
-      dist[id] = Infinity;
-      prev[id] = null;
-    });
+    // Priority Queue statt Array
+    const pq = new PriorityQueue<string>();
 
-    dist[startId] = 0;
+    // Init Start
+    dist.set(startId, 0);
+    pq.enqueue(startId, 0);
 
-    const open: QueueEntry[] = [];
-    open.push({ nodeId: startId, cost: 0 });
+    while (pq.length > 0) {
+      // O(1) statt O(N log N) durch Sortierung
+      const currentId = pq.dequeue()!;
 
-    while (open.length > 0) {
-      open.sort((a, b) => a.cost - b.cost);
-      const { nodeId: currentId } = open.shift()!;
-
+      // Skip, wenn wir diesen Knoten schon günstiger abgearbeitet haben
+      // (Lazy Deletion: Knoten können mehrfach in der PQ sein)
       if (visited.has(currentId)) continue;
       visited.add(currentId);
 
       if (currentId === targetId) {
-        return this.buildRoute(graph, prev, dist[targetId], startId, targetId);
+        return this.buildRoute(graph, prev, dist.get(targetId)!, startId, targetId);
       }
 
-      // *** WICHTIG: richtige Kantenquelle ***
       const edges = graph.adjacency[currentId];
       if (!edges) continue;
 
@@ -66,52 +59,54 @@ export class DijkstraRunner implements AlgorithmRunner {
         if (visited.has(neighborId)) continue;
 
         const cost = edgeBaseCost(edge, weights);
-        const newCost = dist[currentId] + cost;
+        const currentDist = dist.get(currentId)!;
+        const newDist = currentDist + cost;
 
-        if (newCost < dist[neighborId]) {
-          dist[neighborId] = newCost;
-          prev[neighborId] = currentId;
-          open.push({ nodeId: neighborId, cost: newCost });
+        const neighborDist = dist.get(neighborId) ?? Infinity;
+
+        if (newDist < neighborDist) {
+          dist.set(neighborId, newDist);
+          prev.set(neighborId, currentId);
+          pq.enqueue(neighborId, newDist);
         }
       }
     }
 
-    console.warn('DijkstraRunner: no path found');
     return null;
   }
 
   private buildRoute(
     graph: Graph,
-    prev: Record<string, string | null>,
+    prev: Map<string, string | null>,
     finalCost: number,
     startId: string,
     targetId: string
   ): RouteResult {
-
-    // Schritt 1: Knoten-ID Pfad rekonstruieren
-    const idPath: string[] = [];
-    let cur: string | null = targetId;
-
-    while (cur) {
-      idPath.push(cur);
-      cur = prev[cur];
-    }
-    idPath.reverse();
-
-    // Schritt 2: Node-Objekte erzeugen
-    const nodes = idPath.map(id => graph.nodes[id]);
-
-    // Schritt 3: Kanten erzeugen
+    const nodes: GraphNode[] = [];
     const edges = [];
-    for (let i = 0; i < idPath.length - 1; i++) {
-      const from = idPath[i];
-      const to = idPath[i + 1];
 
-      const edge = graph.adjacency[from].find(e => e.to === to);
-      if (edge) edges.push(edge);
+    let curr: string | null = targetId;
+    const pathIds: string[] = [];
+
+    while (curr) {
+      pathIds.push(curr);
+      if (curr === startId) break;
+      curr = prev.get(curr) || null;
+    }
+    pathIds.reverse();
+
+    // Nodes und Edges rekonstruieren
+    for (let i = 0; i < pathIds.length; i++) {
+      const id = pathIds[i];
+      nodes.push(graph.nodes[id]);
+
+      if (i < pathIds.length - 1) {
+        const nextId = pathIds[i+1];
+        const edge = graph.adjacency[id]?.find(e => e.to === nextId);
+        if (edge) edges.push(edge);
+      }
     }
 
-    // Schritt 4: Polyline erzeugen
     const polyline: [number, number][] = nodes.map(n => [n.lat, n.lon]);
 
     return {
@@ -121,5 +116,4 @@ export class DijkstraRunner implements AlgorithmRunner {
       totalCost: finalCost
     };
   }
-
 }

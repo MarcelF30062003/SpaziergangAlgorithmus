@@ -243,7 +243,7 @@ export class Runner {
   runRoundDijkstra() {
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
-    const desiredDistance = 3000;
+    const desiredDistance = 8000;
     const params = { lat: 40.7829, lon: -73.9654, radius: desiredDistance };
 
     this.osmService.fetchGraph(params).subscribe(graph => {
@@ -260,7 +260,7 @@ export class Runner {
   runRoundAStar() {
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
-    const desiredDistance = 3000; // 3 km Runde
+    const desiredDistance = 8000; // 3 km Runde
 
     // Hier verwende ich deine Paderborn-Koordinaten aus den anderen Methoden,
     // passe dies ggf. an, wenn du New York (Central Park) nutzen willst.
