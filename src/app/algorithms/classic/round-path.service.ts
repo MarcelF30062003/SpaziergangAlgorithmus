@@ -1,5 +1,7 @@
+// src/app/algorithms/classic/round-path.service.ts
+
 import { Injectable, inject } from '@angular/core';
-import { Graph } from '../../core/models/graph.model';
+import { Graph, GraphEdge } from '../../core/models/graph.model';
 import { WeightConfig } from '../../core/models/weight.model';
 import { RouteResult } from '../../core/models/route.model';
 import { DijkstraRunner } from './dijkstra';
@@ -14,12 +16,16 @@ export class RoundPathService {
   private readonly dijkstra = inject(DijkstraRunner);
   private readonly graphService = inject(GraphService);
 
+  // Strafe für bereits genutzte Wege (in Metern)
+  // 10km Strafe sorgt dafür, dass der Dijkstra diesen Weg nur im absoluten Notfall nimmt
+  private readonly PENALTY_COST = 10000;
+
   /**
    * Erzeugt einen echten Rundweg:
-   *
-   * 1. Start → Anchor1 (ungefähr desiredDistance / 2)
-   * 2. Anchor1 → Anchor2 ("seitlicher" Punkt)
-   * 3. Anchor2 → Start
+   * 1. Start -> Anchor1
+   * 2. Anchor1 -> Anchor2
+   * 3. Anchor2 -> Start
+   * * Neu: Nutzt Penalties, um Überschneidungen zu verhindern.
    */
   buildRoundRoute(
     graph: Graph,
@@ -28,54 +34,83 @@ export class RoundPathService {
     weights: WeightConfig
   ): RouteResult | null {
 
-    // --------------------------------
-    // Schritt 1: Anchor 1 suchen
-    // --------------------------------
-    const anchor1 = this.graphService.findAnchorNode(graph, startId, desiredDistance / 2);
+    // Optimierung: Radius etwas kleiner wählen für eine 3-Schenkel-Runde
+    // (Distanz / 3) ist oft besser für Dreiecke als (Distanz / 2)
+    const legDist = desiredDistance / 3;
+
+    // 1. Anchor 1 suchen
+    const anchor1 = this.graphService.findAnchorNode(graph, startId, legDist);
     if (!anchor1) {
       console.warn('Kein Anchor1 gefunden');
       return null;
     }
 
-    // --------------------------------
-    // Schritt 2: Anchor 2 (seitlich versetzter Punkt)
-    // --------------------------------
-    const anchor2 = this.findSideAnchor(graph, startId, anchor1, desiredDistance / 2);
+    // 2. Anchor 2 (seitlich versetzt)
+    const anchor2 = this.findSideAnchor(graph, startId, anchor1, legDist);
     if (!anchor2) {
       console.warn('Kein Anchor2 gefunden');
       return null;
     }
 
-    // --------------------------------
-    // Schritt 3: 3× Dijkstra
-    // --------------------------------
+    // --- SCHRITT 1: Hinweg (Start -> Anchor1) ---
     const leg1 = this.dijkstra.run(graph, startId, anchor1, weights);
-    const leg2 = this.dijkstra.run(graph, anchor1, anchor2, weights);
-    const leg3 = this.dijkstra.run(graph, anchor2, startId, weights);
+    if (!leg1) return null;
 
-    if (!leg1 || !leg2 || !leg3) {
-      console.warn("Min. eine Teilroute konnte nicht berechnet werden");
+    // >> PENALTY ANWENDEN: Hinweg für Rückweg sperren
+    this.applyPenalty(leg1.edges);
+
+    // --- SCHRITT 2: Querverbindung (Anchor1 -> Anchor2) ---
+    const leg2 = this.dijkstra.run(graph, anchor1, anchor2, weights);
+    if (!leg2) {
+      // Aufräumen, falls es schiefgeht
+      this.restorePenalty(leg1.edges);
+      console.warn("Verbindung Anchor1 -> Anchor2 nicht möglich");
       return null;
     }
 
-    // --------------------------------
-    // Schritt 4: Routen kombinieren
-    // --------------------------------
+    // >> PENALTY ANWENDEN: Auch diesen Weg sperren
+    this.applyPenalty(leg2.edges);
+
+    // --- SCHRITT 3: Rückweg (Anchor2 -> Start) ---
+    // Der Dijkstra ist jetzt gezwungen, einen neuen Weg zu finden
+    const leg3 = this.dijkstra.run(graph, anchor2, startId, weights);
+
+    // >> RESTORE: Den Graphen sofort wieder in den Originalzustand versetzen
+    this.restorePenalty(leg1.edges);
+    this.restorePenalty(leg2.edges);
+
+    if (!leg3) {
+      console.warn("Rückweg nicht möglich");
+      return null;
+    }
+
+    // 4. Routen kombinieren
     const merged12 = this.graphService.combineRoutes(leg1, leg2);
     const merged123 = this.graphService.combineRoutes(merged12, leg3);
 
     return merged123;
   }
 
-
+  /**
+   * Erhöht die Distanz-Kosten temporär, um Wege unattraktiv zu machen.
+   */
+  private applyPenalty(edges: GraphEdge[]) {
+    for (const edge of edges) {
+      edge.distance += this.PENALTY_COST;
+    }
+  }
 
   /**
-   * Anchor 2 = Knoten, der:
-   *
-   * - ungefähr desiredDistance entfernt ist (wie Anchor1)
-   * - vom Winkel her möglichst SEITLICH zu Anchor1 liegt
-   *
-   * So erzwingen wir eine Rundform.
+   * Macht die Änderungen rückgängig.
+   */
+  private restorePenalty(edges: GraphEdge[]) {
+    for (const edge of edges) {
+      edge.distance -= this.PENALTY_COST;
+    }
+  }
+
+  /**
+   * Sucht einen Knoten, der seitlich zu Start->Anchor1 liegt.
    */
   private findSideAnchor(
     graph: Graph,
@@ -104,7 +139,8 @@ export class RoundPathService {
       // Winkel berechnen
       const angle = this.sideAngle(start, anchor1, n);
 
-      // Score = möglichst großer Winkel seitlich
+      // Score = möglichst großer Winkel (max ~180 Grad / PI)
+      // Wir bevorzugen Punkte, die "weit weg" von der Linie Start-Anchor1 sind
       if (angle > bestScore) {
         bestScore = angle;
         bestNode = id;
@@ -114,15 +150,6 @@ export class RoundPathService {
     return bestNode;
   }
 
-
-  /**
-   * Winkel zwischen:
-   *
-   *  start → anchor1
-   *  start → candidate
-   *
-   * Je größer der Winkel, desto weiter seitlich.
-   */
   private sideAngle(start: any, a1: any, n: any): number {
     const v1 = [a1.lat - start.lat, a1.lon - start.lon];
     const v2 = [n.lat - start.lat, n.lon - start.lon];
