@@ -11,7 +11,7 @@ import {GraphNode} from '../core/models/graph.model';
 import {AntColonyOptimizationRunner} from '../algorithms/stochastic/ant-colony-optimization';
 import { DijkstraRunner } from '../algorithms/classic/dijkstra';
 import { RoundPathService } from '../algorithms/classic/round-path.service';
-
+import { RoundAStarService } from '../algorithms/classic/round-astar.service'; // <--- NEU
 
 @Component({
   selector: 'app-runner',
@@ -27,9 +27,7 @@ export class Runner {
   graphService: GraphService = inject(GraphService);
   private readonly dijkstraRunner = inject(DijkstraRunner);
   private readonly roundService = inject(RoundPathService);
-
-
-
+  private readonly roundAStarService = inject(RoundAStarService); // <--- NEU
 
   currentRoute: RouteResult | null = null;
 
@@ -47,17 +45,13 @@ export class Runner {
   runGreedy() {
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
-
-    const desiredDistance = 3000; // 3 km Spaziergang
-
+    const desiredDistance = 3000;
     const params = {lat: 51.7189, lon: 8.7575, radius: 2000};
 
     this.osmService.fetchGraph(params).subscribe(graph => {
       const startId = this.graphService.findNearestNode(graph, params.lat, params.lon);
-
       const anchorId = this.graphService.findAnchorNode(graph, startId!, desiredDistance);
-      console.log(startId);
-      console.log(anchorId);
+
       const out = this.greedyRunner.run(graph, startId!, anchorId!, weights);
       const back = this.greedyRunner.run(graph, anchorId!, startId!, weights);
       this.currentRoute = this.graphService.combineRoutes(out!, back!);
@@ -69,7 +63,6 @@ export class Runner {
   runBeam() {
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
-
     const desiredDistance = 3000;
     const params = { lat: 51.7189, lon: 8.7575, radius: 2000 };
 
@@ -81,11 +74,10 @@ export class Runner {
       const back = this.beamRunner.run(graph, anchorId!, startId!, weights);
 
       if (!out || !back) {
-        console.warn('runBeam: out or back is null', { out, back });
+        console.warn('runBeam: out or back is null');
         this.currentRoute = null;
         return;
       }
-
       this.currentRoute = this.graphService.combineRoutes(out, back);
       this.currentStartNode = graph.nodes[startId!];
     });
@@ -232,28 +224,18 @@ export class Runner {
   runDijkstra() {
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
-
     const desiredDistance = 3000;
-    const params = { lat: 40.7829, lon: -73.9654, radius: desiredDistance };
+    const params = { lat: 40.7829, lon: -73.9654, radius: desiredDistance }; // Achtung: Koordinaten sind hier hardcoded New York
 
     this.osmService.fetchGraph(params).subscribe(graph => {
       const startId = this.graphService.findNearestNode(graph, params.lat, params.lon);
-      if (!startId) {
-        console.warn("Startpunkt fehlt");
-        return;
-      }
-
+      if (!startId) return;
 
       const anchorId = this.graphService.findAnchorNode(graph, startId, desiredDistance);
-
       const out = this.dijkstraRunner.run(graph, startId, anchorId!, weights);
       const back = this.dijkstraRunner.run(graph, anchorId!, startId, weights);
 
-      if (!out || !back) {
-        console.warn("Dijkstra Rundweg nicht möglich");
-        return;
-      }
-
+      if (!out || !back) return;
       this.currentRoute = this.graphService.combineRoutes(out, back);
     });
   }
@@ -261,29 +243,46 @@ export class Runner {
   runRoundDijkstra() {
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
-
-    const desiredDistance = 3000; // z. B. 3 km Radius
-
+    const desiredDistance = 3000;
     const params = { lat: 40.7829, lon: -73.9654, radius: desiredDistance };
 
     this.osmService.fetchGraph(params).subscribe(graph => {
+      const startId = this.graphService.findNearestNode(graph, params.lat, params.lon);
+      if (!startId) return;
 
+      const res = this.roundService.buildRoundRoute(graph, startId, desiredDistance, weights);
+      if (res) this.currentRoute = res;
+    });
+  }
+
+  // --- NEU: A* Rundweg ---
+
+  runRoundAStar() {
+    const matrix = this.weightMatrixService.getDefault();
+    const weights = this.weightMatrixService.cloneWeights(matrix.weights);
+    const desiredDistance = 3000; // 3 km Runde
+
+    // Hier verwende ich deine Paderborn-Koordinaten aus den anderen Methoden,
+    // passe dies ggf. an, wenn du New York (Central Park) nutzen willst.
+    const params = { lat: 51.7189, lon: 8.7575, radius: 2000 };
+
+    this.osmService.fetchGraph(params).subscribe(graph => {
       const startId = this.graphService.findNearestNode(graph, params.lat, params.lon);
       if (!startId) {
         console.warn("Startpunkt nicht gefunden");
         return;
       }
 
-      const res = this.roundService.buildRoundRoute(graph, startId, desiredDistance, weights);
+      console.info('Starte A* Rundweg Berechnung...');
+      const res = this.roundAStarService.buildRoundRoute(graph, startId, desiredDistance, weights);
 
       if (!res) {
-        console.warn("Rundweg konnte nicht gebaut werden");
+        console.warn("A* Rundweg konnte nicht generiert werden");
         return;
       }
 
       this.currentRoute = res;
+      console.info('A* Rundweg fertig:', res);
     });
   }
-
-
 }
