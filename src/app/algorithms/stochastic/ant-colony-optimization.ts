@@ -1,5 +1,3 @@
-// src/app/algorithms/stochastic/ant-colony-optimization.ts
-
 import { Injectable } from '@angular/core';
 import { AlgorithmRunner } from '../../core/models/algorithm-runner.model';
 import { Graph, GraphEdge, GraphNode } from '../../core/models/graph.model';
@@ -7,7 +5,6 @@ import { RouteResult } from '../../core/models/route.model';
 import { WeightConfig } from '../../core/models/weight.model';
 import { distanceBetweenNodes } from '../../core/utils/geometry.utils';
 
-// Import der Score-Funktionen aus cost.util.ts
 import {
   curvatureScorePlaceholder, difficultyScoreFromTags, lightShadowScoreFromTags,
   overtakeScoreFromTags,
@@ -27,6 +24,12 @@ interface AntPath {
   routeQuality: number;
 }
 
+interface PathStep {
+  node: GraphNode;
+  edgeFromParent: GraphEdge | null; // Die Kante, über die wir zu diesem Node kamen
+  triedEdges: Set<string>;          // Kanten, die von diesem Node aus schon probiert wurden (Backtracking)
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -35,13 +38,13 @@ export class AntColonyOptimizationRunner implements AlgorithmRunner {
   name = 'Ant Colony Optimization (ACO)';
 
   // ACO-Parameter
-  private readonly numAnts = 15;           // Anzahl Ameisen pro Iteration (reduziert für Performance)
-  private readonly numIterations = 25;     // Anzahl Iterationen
+  private readonly numAnts = 15;
+  private readonly numIterations = 25;
   private readonly alpha = 1.0;            // Einfluss der Pheromone
-  private readonly beta = 3.0;             // Einfluss der Heuristik (erhöht für bessere Zielausrichtung)
-  private readonly evaporationRate = 0.1;  // Verdunstungsrate (0.1 = 10% Verdunstung)
-  private readonly q0 = 0.85;              // Exploitation vs Exploration (85% beste Wahl)
-  private readonly initialPheromone = 1.0; // Initiale Pheromonmenge (erhöht)
+  private readonly beta = 2.0;             // Einfluss der Heuristik
+  private readonly evaporationRate = 0.1;  // Verdunstung
+  private readonly q0 = 0.80;              // Exploitation vs Exploration
+  private readonly initialPheromone = 1.0;
 
   run(
     graph: Graph,
@@ -69,11 +72,10 @@ export class AntColonyOptimizationRunner implements AlgorithmRunner {
 
     console.log(`[ACO] Starting: ${this.numAnts} ants, ${this.numIterations} iterations`);
 
-    // Hauptschleife: Iterationen
     for (let iter = 0; iter < this.numIterations; iter++) {
       const iterationPaths: AntPath[] = [];
 
-      // Jede Ameise konstruiert einen Pfad
+      // Jede Ameise läuft los
       for (let ant = 0; ant < this.numAnts; ant++) {
         const path = this.constructPath(
           graph,
@@ -87,8 +89,11 @@ export class AntColonyOptimizationRunner implements AlgorithmRunner {
         if (path) {
           iterationPaths.push(path);
 
-          // Beste Route tracken
-          const cost = path.totalDistance / (path.routeQuality + 0.01); // Niedriger = besser
+          // Kostenfunktion: Minimieren.
+          // Wir nutzen (Distanz / Quality), damit kürzere und qualitativ hochwertigere Wege gewinnen.
+          // +0.1 um Division durch 0 zu vermeiden.
+          const cost = path.totalDistance / (path.routeQuality + 0.1);
+
           if (cost < bestCost) {
             bestCost = cost;
             bestPath = path;
@@ -96,36 +101,35 @@ export class AntColonyOptimizationRunner implements AlgorithmRunner {
         }
       }
 
-      // Pheromone verdunsten lassen
+      // Pheromone verdunsten
       for (const edgeId in pheromones) {
         pheromones[edgeId] *= (1 - this.evaporationRate);
       }
 
-      // Pheromone von erfolgreichen Pfaden hinzufügen
+      // Pheromone verstärken (Update)
       for (const path of iterationPaths) {
-        const deposit = path.routeQuality / (path.totalDistance + 1);
+        const deposit = (path.routeQuality * 100) / (path.totalDistance + 1);
         for (const edge of path.edges) {
-          pheromones[edge.id] = (pheromones[edge.id] || 0) + deposit;
+          pheromones[edge.id] = (pheromones[edge.id] || this.initialPheromone) + deposit;
         }
       }
 
-      if (iter % 5 === 0) {
-        console.log(`[ACO] Iteration ${iter}: Best cost = ${bestCost.toFixed(2)}, Paths found = ${iterationPaths.length}`);
+      if (iter % 5 === 0 || iter === this.numIterations - 1) {
+        console.log(`[ACO] Iteration ${iter}: Paths found = ${iterationPaths.length}, Best cost = ${bestCost === Infinity ? 'None' : bestCost.toFixed(2)}`);
       }
     }
 
     if (!bestPath) {
-      console.warn('[ACO] No path found');
+      console.warn('[ACO] No path found after all iterations');
       return null;
     }
 
-    console.log(`[ACO] Complete. Best route quality: ${bestPath.routeQuality.toFixed(3)}, Distance: ${bestPath.totalDistance.toFixed(0)}m`);
-
+    console.log(`[ACO] Success! Distance: ${bestPath.totalDistance.toFixed(0)}m, Avg Quality: ${bestPath.routeQuality.toFixed(2)}`);
     return this.convertToRouteResult(bestPath, weights);
   }
 
   /**
-   * Eine Ameise konstruiert einen Pfad von Start zu Ziel
+   * Pfadkonstruktion mit Stack-basiertem Backtracking, um Sackgassen zu verlassen.
    */
   private constructPath(
     graph: Graph,
@@ -133,230 +137,231 @@ export class AntColonyOptimizationRunner implements AlgorithmRunner {
     targetId: string,
     weights: WeightConfig,
     pheromones: Record<string, number>,
-    avoidEdges?: Set<string>
+    globalAvoidEdges?: Set<string>
   ): AntPath | null {
-    const visited = new Set<string>();
-    const pathEdges: GraphEdge[] = [];
-    const pathNodes: GraphNode[] = [];
+    const startNode = graph.nodes[startId];
 
-    let currentId = startId;
-    pathNodes.push(graph.nodes[currentId]);
+    // Stack für DFS/Backtracking
+    const stack: PathStep[] = [];
+    const visitedIds = new Set<string>();
 
-    let totalDistance = 0;
-    const maxSteps = 1000; // Sicherheit gegen Endlosschleifen
+    // Startknoten auf den Stack
+    stack.push({
+      node: startNode,
+      edgeFromParent: null,
+      triedEdges: new Set<string>()
+    });
+    visitedIds.add(startId);
 
-    for (let step = 0; step < maxSteps; step++) {
-      if (currentId === targetId) {
-        // Ziel erreicht!
-        const routeQuality = this.calculateRouteQuality(pathEdges, weights);
-        return {
-          edges: pathEdges,
-          nodes: pathNodes,
-          totalDistance,
-          routeQuality
-        };
+    let steps = 0;
+    const MAX_STEPS = 3000; // Notbremse gegen Endlosschleifen
+
+    while (stack.length > 0 && steps < MAX_STEPS) {
+      steps++;
+      const currentStep = stack[stack.length - 1];
+      const currentNode = currentStep.node;
+
+      // Ziel erreicht?
+      if (currentNode.id === targetId) {
+        return this.buildPathFromStack(stack, weights);
       }
-
-      visited.add(currentId);
 
       // Nächste Kante wählen
       const nextEdge = this.selectNextEdge(
         graph,
-        currentId,
+        currentNode.id,
         targetId,
-        visited,
+        visitedIds,
+        currentStep.triedEdges, // Welche Kanten von hier aus schon erfolglos waren
         weights,
         pheromones,
-        avoidEdges
+        globalAvoidEdges
       );
 
-      if (!nextEdge) {
-        // Sackgasse - aber vielleicht sind wir am Ziel?
-        if (currentId === targetId) {
-          const routeQuality = this.calculateRouteQuality(pathEdges, weights);
-          return {
-            edges: pathEdges,
-            nodes: pathNodes,
-            totalDistance,
-            routeQuality
-          };
-        }
-        return null;
-      }
+      if (nextEdge) {
+        // Vorwärts gehen
+        const nextNode = graph.nodes[nextEdge.to];
+        visitedIds.add(nextNode.id);
 
-      pathEdges.push(nextEdge);
-      totalDistance += nextEdge.distance;
-      currentId = nextEdge.to;
-      pathNodes.push(graph.nodes[currentId]);
+        stack.push({
+          node: nextNode,
+          edgeFromParent: nextEdge,
+          triedEdges: new Set<string>()
+        });
+      } else {
+        // Sackgasse: Backtracking
+        const failedStep = stack.pop();
+        if (!failedStep) return null;
+
+        visitedIds.delete(failedStep.node.id); // Node wieder freigeben
+
+        // Wenn der Stack nicht leer ist, markieren wir die Kante im Vorgänger als "versucht"
+        if (stack.length > 0) {
+          const parentStep = stack[stack.length - 1];
+          if (failedStep.edgeFromParent) {
+            parentStep.triedEdges.add(failedStep.edgeFromParent.id);
+          }
+        } else {
+          // Wir sind zurück am Start und haben keine Optionen mehr -> Kein Weg
+          return null;
+        }
+      }
     }
 
     return null; // Timeout
   }
 
-  /**
-   * Wählt die nächste Kante basierend auf Pheromonen und Heuristik
-   */
+  private buildPathFromStack(stack: PathStep[], weights: WeightConfig): AntPath {
+    const nodes: GraphNode[] = [];
+    const edges: GraphEdge[] = [];
+    let dist = 0;
+
+    for (const step of stack) {
+      nodes.push(step.node);
+      if (step.edgeFromParent) {
+        edges.push(step.edgeFromParent);
+        dist += step.edgeFromParent.distance;
+      }
+    }
+
+    const quality = this.calculateRouteQuality(edges, weights);
+    return { nodes, edges, totalDistance: dist, routeQuality: quality };
+  }
+
   private selectNextEdge(
     graph: Graph,
     currentId: string,
     targetId: string,
-    visited: Set<string>,
+    visitedIds: Set<string>,
+    triedEdgesLocal: Set<string>,
     weights: WeightConfig,
     pheromones: Record<string, number>,
-    avoidEdges?: Set<string>
+    globalAvoidEdges?: Set<string>
   ): GraphEdge | null {
     const neighbors = graph.adjacency[currentId] || [];
     const candidates: Array<{ edge: GraphEdge; attractiveness: number }> = [];
 
+    const targetNode = graph.nodes[targetId];
+
     for (const edge of neighbors) {
-      if (visited.has(edge.to)) continue;
+      // Kriterien für Ausschluss:
+      if (globalAvoidEdges && globalAvoidEdges.has(edge.id)) continue;
+      if (visitedIds.has(edge.to)) continue;
+      if (triedEdgesLocal.has(edge.id)) continue;
 
       const nextNode = graph.nodes[edge.to];
       if (!nextNode) continue;
 
-      // Berechne Attraktivität
+      // Berechnung Attraktivität
       const pheromone = pheromones[edge.id] || this.initialPheromone;
-      const heuristic = this.calculateHeuristic(edge, nextNode, graph.nodes[targetId], weights, avoidEdges);
+      const heuristic = this.calculateHeuristic(edge, nextNode, targetNode, weights);
 
+      // Formel: Tau^alpha * Eta^beta
       const attractiveness = Math.pow(pheromone, this.alpha) * Math.pow(heuristic, this.beta);
-
       candidates.push({ edge, attractiveness });
     }
 
     if (candidates.length === 0) return null;
 
-    // Exploitation vs Exploration
+    // Entscheidung: Exploitation vs Exploration
     const q = Math.random();
-
     if (q < this.q0) {
-      // Exploitation: Wähle beste Kante
+      // Exploitation: Wähle den Besten
       candidates.sort((a, b) => b.attractiveness - a.attractiveness);
       return candidates[0].edge;
     } else {
-      // Exploration: Wähle probabilistisch
+      // Exploration: Roulette-Wheel Selection
       return this.selectProbabilistic(candidates);
     }
   }
 
-  /**
-   * Berechnet die Heuristik für eine Kante
-   * Höherer Wert = besser
-   */
   private calculateHeuristic(
     edge: GraphEdge,
     nextNode: GraphNode,
     targetNode: GraphNode,
-    weights: WeightConfig,
-    avoidEdges?: Set<string>
+    weights: WeightConfig
   ): number {
-    // Qualität der Kante (0-1)
+    // 1. Qualität der Kante (0.0 bis 1.0)
     const quality = this.edgeQualityScore(edge, weights);
 
-    // Distanz zum Ziel (je näher, desto besser)
-    const distanceToTarget = distanceBetweenNodes(nextNode, targetNode);
-    const distanceFactor = 1000 / (distanceToTarget + 1); // Höherer Faktor für Zielausrichtung
+    // 2. Distanz zum Ziel (je kleiner desto besser)
+    const d = distanceBetweenNodes(nextNode, targetNode);
+    // Invers zur Distanz -> je näher, desto höher der Wert
+    const distFactor = 1000 / (d + 10);
 
-    // Länge der Kante (kürzere Kanten bevorzugt, aber nicht zu stark gewichtet)
-    const edgeLengthFactor = 100 / (edge.distance + 1);
-
-    // Strafe für zu vermeidende Kanten
-    let avoidancePenalty = 1.0;
-    if (avoidEdges && avoidEdges.has(edge.id)) {
-      avoidancePenalty = 0.001; // Sehr starke Strafe
-    }
-
-    // Kombiniere mit mehr Gewicht auf Zieldistanz
-    return (quality * 0.3 + distanceFactor * 0.7) * edgeLengthFactor * avoidancePenalty;
+    // Kombination: Qualität ist wichtig, aber Zieldistanz treibt die Richtung
+    return (quality * 2.0) + (distFactor * 5.0);
   }
 
   /**
-   * Berechnet einen Qualitätsscore (0-1) für eine Kante basierend auf der Gewichtungsmatrix
-   * Höherer Wert = bessere Qualität
+   * Berechnet Score (0..1) basierend auf ALLEN konfigurierten Gewichten.
    */
   private edgeQualityScore(edge: GraphEdge, weights: WeightConfig): number {
-    let qualitySum = 0;
-    let weightSum = 0;
+    let sum = 0;
+    let wSum = 0;
 
-    // Alle Kriterien durchgehen und gewichtet summieren
-    const criteria = [
-      { score: pedestrianFriendlyScore(edge), weight: weights.pedestrianFriendly },
-      { score: pathWidthScore(edge), weight: weights.pathWidth },
-      { score: curvatureScorePlaceholder(edge), weight: weights.pathCurvature },
-      { score: overtakeScoreFromTags(edge), weight: weights.overtakeOptions },
-      { score: shadeScoreFromTags(edge), weight: weights.treeShade },
-      { score: vegetationNoiseScoreFromTags(edge), weight: weights.vegetationNoiseDampening },
-      { score: lightShadowScoreFromTags(edge), weight: weights.lightShadow },
-      { score: seatingScoreFromTags(edge), weight: weights.seating },
-      { score: shelterScoreFromTags(edge), weight: weights.shelter },
-      { score: safeCrossingScoreFromTags(edge), weight: weights.safeCrossings },
-      { score: slopeScoreFromTags(edge), weight: weights.maxSlope },
-      { score: seasonalVegetationScoreFromTags(edge), weight: weights.seasonalVegetation },
-      { score: viewWindowScoreFromTags(edge), weight: weights.viewWindows },
-      { score: difficultyScoreFromTags(edge), weight: weights.difficulty },
-      { score: slipRiskScoreFromTags(edge), weight: weights.slipRisk }
-    ];
+    // Hilfsfunktion zum Aufsummieren
+    const add = (val: number, w: number) => {
+      sum += val * w;
+      wSum += w;
+    };
 
-    for (const criterion of criteria) {
-      qualitySum += criterion.score * criterion.weight;
-      weightSum += criterion.weight;
-    }
+    // Einbindung aller Hilfsfunktionen aus cost.util.ts passend zum WeightConfig Interface
+    add(pedestrianFriendlyScore(edge), weights.pedestrianFriendly);
+    add(pathWidthScore(edge), weights.pathWidth);
+    add(curvatureScorePlaceholder(edge), weights.pathCurvature);
+    add(overtakeScoreFromTags(edge), weights.overtakeOptions);
 
-    // Normalisieren auf 0-1
-    return weightSum > 0 ? qualitySum / weightSum : 0.5;
+    add(shadeScoreFromTags(edge), weights.treeShade);
+    add(vegetationNoiseScoreFromTags(edge), weights.vegetationNoiseDampening);
+    add(lightShadowScoreFromTags(edge), weights.lightShadow);
+    add(seatingScoreFromTags(edge), weights.seating);
+    add(shelterScoreFromTags(edge), weights.shelter);
+
+    add(safeCrossingScoreFromTags(edge), weights.safeCrossings);
+    add(slopeScoreFromTags(edge), weights.maxSlope);
+    add(seasonalVegetationScoreFromTags(edge), weights.seasonalVegetation);
+    add(viewWindowScoreFromTags(edge), weights.viewWindows);
+
+    add(difficultyScoreFromTags(edge), weights.difficulty);
+    add(slipRiskScoreFromTags(edge), weights.slipRisk);
+
+    // Wenn alle Gewichte 0 sind oder keine Daten da sind, geben wir neutral 0.5 zurück
+    if (wSum === 0) return 0.5;
+
+    return sum / wSum;
   }
 
-  /**
-   * Berechnet die Gesamtqualität einer Route
-   */
   private calculateRouteQuality(edges: GraphEdge[], weights: WeightConfig): number {
     if (edges.length === 0) return 0;
-
-    let totalQuality = 0;
-    for (const edge of edges) {
-      totalQuality += this.edgeQualityScore(edge, weights);
+    let sum = 0;
+    for (const e of edges) {
+      sum += this.edgeQualityScore(e, weights);
     }
-
-    return totalQuality / edges.length; // Durchschnittliche Qualität
+    return sum / edges.length;
   }
 
-  /**
-   * Probabilistische Auswahl basierend auf Attraktivität
-   */
   private selectProbabilistic(
     candidates: Array<{ edge: GraphEdge; attractiveness: number }>
   ): GraphEdge {
-    const totalAttractiveness = candidates.reduce((sum, c) => sum + c.attractiveness, 0);
+    const total = candidates.reduce((acc, c) => acc + c.attractiveness, 0);
+    if (total <= 0) return candidates[0].edge;
 
-    if (totalAttractiveness === 0) {
-      // Fallback: Zufällige Auswahl
-      return candidates[Math.floor(Math.random() * candidates.length)].edge;
+    let r = Math.random() * total;
+    for (const c of candidates) {
+      r -= c.attractiveness;
+      if (r <= 0) return c.edge;
     }
-
-    let random = Math.random() * totalAttractiveness;
-
-    for (const candidate of candidates) {
-      random -= candidate.attractiveness;
-      if (random <= 0) {
-        return candidate.edge;
-      }
-    }
-
     return candidates[candidates.length - 1].edge;
   }
 
-  /**
-   * Konvertiert AntPath zu RouteResult
-   */
   private convertToRouteResult(path: AntPath, weights: WeightConfig): RouteResult {
-    const polyline: [number, number][] = path.nodes.map(n => [n.lat, n.lon]);
+    const polyline: [number, number][] = path.nodes.map((n) => [n.lat, n.lon]);
 
-    // Kosten ähnlich wie bei anderen Algorithmen berechnen
-    let totalCost = 0;
-    for (const edge of path.edges) {
-      const quality = this.edgeQualityScore(edge, weights);
-      // Niedrigere Qualität = höhere Kosten
-      totalCost += edge.distance * (2 - quality); // Quality 1 → Faktor 1, Quality 0 → Faktor 2
-    }
+    // Kostenberechnung für das Endergebnis
+    // Wir nutzen hier eine ähnliche Logik wie bei A*: Distanz * Penalty
+    const qualityPenalty = 1 - path.routeQuality;
+    const totalCost = path.totalDistance * (1 + qualityPenalty);
 
     return {
       nodes: path.nodes,
