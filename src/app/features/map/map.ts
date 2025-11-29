@@ -81,7 +81,7 @@ export class Map implements AfterViewInit, OnChanges {
       this.startLayer = L.circleMarker([this.startNode.lat, this.startNode.lon], {
         color: 'white',       // Weißer Rand für Kontrast
         weight: 3,            // Randbreite
-        fillColor: '#0f0',    // Leuchtendes Grün innen
+        fillColor: '#0037ff',    // Leuchtendes Grün innen
         fillOpacity: 1,
         radius: 8
       }).addTo(this.map).bindPopup("Start");
