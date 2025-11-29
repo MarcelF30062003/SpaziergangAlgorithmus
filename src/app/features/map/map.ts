@@ -5,10 +5,10 @@ import {GraphNode} from '../../core/models/graph.model';
 
 @Component({
   selector: 'app-map',
+  standalone: true,
   imports: [],
   templateUrl: './map.html',
-  styleUrl: './map.css',
-  standalone: true
+  styleUrl: './map.css'
 })
 export class Map implements AfterViewInit, OnChanges {
   @ViewChild('map', { static: true }) mapContainer!: ElementRef;
@@ -19,11 +19,10 @@ export class Map implements AfterViewInit, OnChanges {
   @Input() startNode?: GraphNode | null;
 
   private map!: L.Map;
-  private routeLayer?: L.Polyline;
 
   // NEU: Layer für die Marker
   private startLayer?: L.CircleMarker;
-  private anchorLayer?: L.CircleMarker;
+  private routeLayer?: L.Polyline;
 
   ngAfterViewInit(): void {
     this.initMap();
@@ -38,13 +37,20 @@ export class Map implements AfterViewInit, OnChanges {
 
   private initMap(): void {
     this.map = L.map(this.mapContainer.nativeElement, {
-      center: [51.7189, 8.7575],
+      center: [51.7189, 8.7575], // Paderborn als Default
       zoom: 14,
+      zoomControl: false, // Wir setzen den Zoom-Control manuell (optional, sieht oft cleaner aus)
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
+    // Zoom Control unten rechts, damit es nicht mit dem Header kollidiert
+    L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+
+    // **MODERNER KARTENSTIL**: CartoDB Voyager
+    // Viel sauberer als Standard-OSM, perfekt für Apps
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20
     }).addTo(this.map);
   }
 

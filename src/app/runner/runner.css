@@ -1,0 +1,155 @@
+/* Layout Container: Füllt den ganzen Screen, ordnet Elemente untereinander an */
+.layout-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: #f8fafc;
+}
+
+/* --- Header Styling --- */
+.app-header {
+  flex: 0 0 auto; /* Header wächst/schrumpft nicht ungewollt */
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  z-index: 10; /* Über der Karte (Schattenwurf) */
+}
+
+/* Logo / Titel Bereich */
+.brand-section {
+  min-width: 180px;
+}
+
+.brand-section h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Navigation Bereich (Buttons) */
+.algorithm-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow-x: auto; /* Erlaubt scrollen auf kleinen Screens */
+  padding-bottom: 4px; /* Platz für Scrollbar */
+  -ms-overflow-style: none;  /* IE/Edge Scrollbar verstecken */
+  scrollbar-width: none;  /* Firefox Scrollbar verstecken */
+}
+
+.algorithm-nav::-webkit-scrollbar {
+  display: none; /* Chrome/Safari Scrollbar verstecken */
+}
+
+/* Vertikaler Trennstrich zwischen Gruppen */
+.separator {
+  width: 1px;
+  height: 32px;
+  background-color: #e2e8f0;
+  margin: 0 4px;
+}
+
+/* --- Map Bereich --- */
+.map-wrapper {
+  flex: 1; /* Nimmt den RESTLICHEN Platz ein */
+  position: relative;
+  width: 100%;
+  background-color: #e2e8f0;
+}
+
+/* --- Button Styling (angepasst für Header) --- */
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap; /* Text nicht umbrechen */
+  height: 48px;
+}
+
+.btn .icon {
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(0,0,0,0.04);
+  border-radius: 6px;
+}
+
+.btn-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+
+.btn-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.btn-desc {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Button Varianten */
+.btn-secondary {
+  background-color: #f1f5f9;
+  border-color: transparent;
+  color: #334155;
+}
+
+.btn-secondary:hover {
+  background-color: #e2e8f0;
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+}
+
+.btn-primary .icon {
+  background: rgba(255,255,255,0.2);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Mobile Optimierung: Header umbrechen wenn zu schmal */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .algorithm-nav {
+    width: 100%;
+    padding-bottom: 0;
+  }
+}
