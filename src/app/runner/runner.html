@@ -24,10 +24,23 @@
       </button>
 
       <div class="separator"></div>
-      <button (click)="runSA()">Simulated Annealing starten</button>
-      <button (click)="runACO()">Ant Colony Optimization starten</button>
 
-      <div class="section-label">Klassisch (Exakt)</div>
+      <button (click)="runSA()"  class="btn btn-secondary">
+        <span class="icon">🎯</span>
+        <div class="btn-content">
+          <span class="btn-title">Simulated Annealing</span>
+        </div>
+      </button>
+
+      <button (click)="runACO()" class="btn btn-secondary">
+        <span class="icon">🎯</span>
+        <div class="btn-content">
+          <span class="btn-title">Ant Colony Optimization</span>
+        </div>
+      </button>
+
+
+      <div class="separator"></div>
 
       <button (click)="runDijkstra()" class="btn btn-secondary">
         <span class="icon">🎯</span>
