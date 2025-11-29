@@ -1,34 +1,29 @@
 <div class="layout-container">
 
-  <div class="map-wrapper">
-    <app-map [route]="currentRoute" [startNode]="currentStartNode"></app-map>
-  </div>
-
-  <div class="control-panel">
-    <div class="panel-header">
+  <header class="app-header">
+    <div class="brand-section">
       <h1>🚶 Spaziergang</h1>
-      <p>Wähle eine Strategie für deine Route</p>
+      <span class="subtitle">Wähle deine Strategie</span>
     </div>
-
-    <div class="algorithm-grid">
-      <div class="section-label">Heuristisch (Schnell)</div>
+    <div class="algorithm-nav">
 
       <button (click)="runGreedy()" class="btn btn-secondary">
         <span class="icon">⚡</span>
         <div class="btn-content">
-          <span class="btn-title">Greedy Best-First</span>
-          <span class="btn-desc">Schnell, aber nicht optimal</span>
+          <span class="btn-title">Greedy</span>
+          <span class="btn-desc">Schnell</span>
         </div>
       </button>
 
       <button (click)="runBeam()" class="btn btn-secondary">
         <span class="icon">🔦</span>
         <div class="btn-content">
-          <span class="btn-title">Beam Search</span>
-          <span class="btn-desc">Fokussierte Suche</span>
+          <span class="btn-title">Beam</span>
+          <span class="btn-desc">Fokussiert</span>
         </div>
       </button>
 
+      <div class="separator"></div>
       <button (click)="runSA()">Simulated Annealing starten</button>
       <button (click)="runACO()">Ant Colony Optimization starten</button>
 
@@ -38,27 +33,30 @@
         <span class="icon">🎯</span>
         <div class="btn-content">
           <span class="btn-title">Dijkstra</span>
-          <span class="btn-desc">Kürzester Pfad</span>
+          <span class="btn-desc">Exakt</span>
         </div>
       </button>
 
       <button (click)="runRoundDijkstra()" class="btn btn-secondary">
         <span class="icon">🔄</span>
         <div class="btn-content">
-          <span class="btn-title">3-Punkte Rundweg</span>
-          <span class="btn-desc">Via Dijkstra kombiniert</span>
+          <span class="btn-title">3-Punkt</span>
+          <span class="btn-desc">Rundweg</span>
         </div>
       </button>
-
 
       <button (click)="runRoundAStar()" class="btn btn-secondary">
         <span class="icon">⭐</span>
         <div class="btn-content">
-          <span class="btn-title">A* Rundweg</span>
-          <span class="btn-desc">Intelligenter Rundkurs</span>
+          <span class="btn-title">A* Runde</span>
+          <span class="btn-desc">Smart</span>
         </div>
       </button>
     </div>
+  </header>
+
+  <div class="map-wrapper">
+    <app-map [route]="currentRoute"></app-map>
   </div>
 
 </div>
