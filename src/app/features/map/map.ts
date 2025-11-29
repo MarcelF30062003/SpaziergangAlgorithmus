@@ -20,12 +20,9 @@ export class Map implements AfterViewInit, OnChanges {
 
   private map!: L.Map;
 
-  // Layer-Gruppen für sauberes Aufräumen
-  private routeLayers: L.Layer[] = [];
-
   // NEU: Layer für die Marker
   private startLayer?: L.CircleMarker;
-  private anchorLayer?: L.CircleMarker;
+  private routeLayer?: L.Polyline;
 
   ngAfterViewInit(): void {
     this.initMap();
