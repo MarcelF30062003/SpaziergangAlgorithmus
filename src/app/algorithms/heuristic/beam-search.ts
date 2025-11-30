@@ -8,7 +8,7 @@ import { AlgorithmRunner } from '../../core/models/algorithm-runner.model';
 
 interface BeamEntry {
   nodeId: string;
-  score: number; // f = g + h
+  score: number; // f-Score
 }
 
 @Injectable({
@@ -16,10 +16,15 @@ interface BeamEntry {
 })
 export class BeamSearchRunner implements AlgorithmRunner {
   id = 'beam_search';
-  name = 'Beam Search';
+  name = 'Beam Search (Weighted Path)';
 
-  // Breite des Beams – kannst du später per UI konfigurierbar machen
+  // Breite des Beams
   private readonly beamWidth = 10;
+
+  // NEU: Gewichtung für den gelaufenen Weg (g-Score).
+  // Wert > 1.0: Der Algorithmus wird "vorsichtiger" und bevorzugt kurze Wege (ähnlicher zu Dijkstra).
+  // Wert < 1.0: Der Algorithmus wird "gieriger" und rennt schneller zum Ziel (ähnlicher zu Greedy Best-First).
+  private readonly pathWeight = 4.0; 
 
   run(
     graph: Graph,
@@ -46,7 +51,7 @@ export class BeamSearchRunner implements AlgorithmRunner {
 
     console.info('BeamSearchRunner: no path with beam, falling back to full A* search');
 
-    // 2. Fallback: Vollständige A*-ähnliche Suche (kein Beamschnitt)
+    // 2. Fallback: Vollständige Suche
     return this.runFull(graph, startId, targetId, weights);
   }
 
@@ -68,15 +73,15 @@ export class BeamSearchRunner implements AlgorithmRunner {
     let beam: BeamEntry[] = [
       {
         nodeId: startId,
+        // Initialer Score ist nur Heuristik, da g=0
         score: this.heuristic(graph.nodes[startId], graph.nodes[targetId]),
       },
     ];
 
     while (beam.length > 0) {
-      // besten Kandidaten nach vorne
+      // Sortieren: Kleinster Score zuerst
       beam.sort((a, b) => a.score - b.score);
 
-      // 1. bestes Element rausnehmen
       const current = beam.shift()!;
       const currentId = current.nodeId;
 
@@ -86,11 +91,6 @@ export class BeamSearchRunner implements AlgorithmRunner {
       visited.add(currentId);
 
       if (currentId === targetId && cameFrom[currentId]) {
-        console.info('BeamSearchRunner (beam): path found', {
-          startId,
-          targetId,
-          visited: visited.size,
-        });
         return this.buildRouteResult(graph, startId, targetId, cameFrom, weights);
       }
 
@@ -113,7 +113,11 @@ export class BeamSearchRunner implements AlgorithmRunner {
           cameFrom[nextId] = edge;
 
           const h = this.heuristic(nextNode, graph.nodes[targetId]);
-          const fScore = tentativeG + h;
+          
+          // --- HIER IST DIE ÄNDERUNG ---
+          // Wir multiplizieren g mit dem pathWeight.
+          // Je höher pathWeight, desto "teurer" wirkt jeder Schritt.
+          const fScore = (tentativeG * this.pathWeight) + h;
 
           const existingIndex = beam.findIndex((b) => b.nodeId === nextId);
           if (existingIndex >= 0) {
@@ -126,23 +130,18 @@ export class BeamSearchRunner implements AlgorithmRunner {
         }
       }
 
-      // Beam begrenzen
+      // Beam beschneiden (nur die besten 'beamWidth' behalten)
       if (beam.length > beamWidth) {
         beam.sort((a, b) => a.score - b.score);
         beam = beam.slice(0, beamWidth);
       }
     }
 
-    console.warn('BeamSearchRunner (beam): no path found', {
-      startId,
-      targetId,
-      visited: visited.size,
-    });
     return null;
   }
 
   // -----------------------
-  // Fallback: vollständige Suche (A*-ähnlich)
+  // Fallback: vollständige Suche
   // -----------------------
   private runFull(
     graph: Graph,
@@ -171,11 +170,6 @@ export class BeamSearchRunner implements AlgorithmRunner {
       visited.add(currentId);
 
       if (currentId === targetId && cameFrom[currentId]) {
-        console.info('BeamSearchRunner (full): path found', {
-          startId,
-          targetId,
-          visited: visited.size,
-        });
         return this.buildRouteResult(graph, startId, targetId, cameFrom, weights);
       }
 
@@ -197,7 +191,9 @@ export class BeamSearchRunner implements AlgorithmRunner {
           cameFrom[nextId] = edge;
 
           const h = this.heuristic(nextNode, graph.nodes[targetId]);
-          const fScore = tentativeG + h;
+          
+          // --- HIER EBENFALLS DIE ÄNDERUNG ---
+          const fScore = (tentativeG * this.pathWeight) + h;
 
           const existingIndex = open.findIndex((e) => e.nodeId === nextId);
           if (existingIndex >= 0) {
@@ -211,11 +207,6 @@ export class BeamSearchRunner implements AlgorithmRunner {
       }
     }
 
-    console.warn('BeamSearchRunner (full): no path found', {
-      startId,
-      targetId,
-      visited: visited.size,
-    });
     return null;
   }
 
@@ -236,6 +227,7 @@ export class BeamSearchRunner implements AlgorithmRunner {
     let currentId: string | undefined = targetId;
 
     while (currentId && currentId !== startId) {
+      // Fix für TS7022: Typ explizit angeben
       const edge: GraphEdge | undefined = cameFrom[currentId];
       if (!edge) {
         console.warn('BeamSearchRunner: incomplete path reconstruction');
@@ -246,7 +238,9 @@ export class BeamSearchRunner implements AlgorithmRunner {
       currentId = edge.from;
     }
 
-    pathNodes.push(graph.nodes[startId]);
+    if (graph.nodes[startId]) {
+        pathNodes.push(graph.nodes[startId]);
+    }
 
     pathEdges.reverse();
 
