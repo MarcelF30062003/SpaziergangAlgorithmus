@@ -1,14 +1,16 @@
 import {AfterViewInit, Component, ElementRef, Input, OnChanges, SimpleChanges, ViewChild} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, Input, OnChanges, SimpleChanges, ViewChild} from '@angular/core';
 import {RouteResult} from '../../core/models/route.model';
 import * as L from 'leaflet';
+import {GraphNode} from '../../core/models/graph.model';
 import {GraphNode} from '../../core/models/graph.model';
 
 @Component({
   selector: 'app-map',
+  standalone: true,
   imports: [],
   templateUrl: './map.html',
-  styleUrl: './map.css',
-  standalone: true
+  styleUrl: './map.css'
 })
 export class Map implements AfterViewInit, OnChanges {
   @ViewChild('map', { static: true }) mapContainer!: ElementRef;
@@ -20,6 +22,9 @@ export class Map implements AfterViewInit, OnChanges {
   @Input() anchorNode?: GraphNode | null;
 
   private map!: L.Map;
+
+  // NEU: Layer für die Marker
+  private startLayer?: L.CircleMarker;
   private routeLayer?: L.Polyline;
 
   // NEU: Layer für die Marker
@@ -34,6 +39,12 @@ export class Map implements AfterViewInit, OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (this.map) {
       this.updateView();
+    this.updateView();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (this.map) {
+      this.updateView();
     }
   }
 
@@ -41,19 +52,34 @@ export class Map implements AfterViewInit, OnChanges {
     this.map = L.map(this.mapContainer.nativeElement, {
       center: [51.7189, 8.7575],
       zoom: 14,
+      zoomControl: false, // Wir setzen den Zoom-Control manuell (optional, sieht oft cleaner aus)
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
+    // Zoom Control unten rechts, damit es nicht mit dem Header kollidiert
+    L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+
+    // **MODERNER KARTENSTIL**: CartoDB Voyager
+    // Viel sauberer als Standard-OSM, perfekt für Apps
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20
     }).addTo(this.map);
   }
 
   private updateView(): void {
     // 1. Route zeichnen
+  private updateView(): void {
+    // 1. Route zeichnen
     if (this.routeLayer) {
       this.map.removeLayer(this.routeLayer);
     }
+    if (this.route) {
+      this.routeLayer = L.polyline(this.route.polyline, {
+        weight: 5,
+        opacity: 0.8,
+        color: 'blue',
+      }).addTo(this.map);
     if (this.route) {
       this.routeLayer = L.polyline(this.route.polyline, {
         weight: 5,

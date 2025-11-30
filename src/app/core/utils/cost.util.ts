@@ -85,7 +85,7 @@ export function edgeBaseCost(edge: GraphEdge, weights: WeightConfig): number {
 // Heuristiken pro Kriterium
 // ----------------------
 
-function pedestrianFriendlyScore(edge: GraphEdge): number {
+export function pedestrianFriendlyScore(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.5;
 
@@ -96,7 +96,7 @@ function pedestrianFriendlyScore(edge: GraphEdge): number {
   return 0.5;
 }
 
-function pathWidthScore(edge: GraphEdge): number {
+export function pathWidthScore(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.5;
 
@@ -114,11 +114,11 @@ function pathWidthScore(edge: GraphEdge): number {
 
 // Platzhalter, da echte Linienführung Segmentketten benötigt.
 // Ihr könnt das später ersetzen durch z.B. Kurvenanalyse des Ways.
-function curvatureScorePlaceholder(_edge: GraphEdge): number {
+export function curvatureScorePlaceholder(_edge: GraphEdge): number {
   return 0.5;
 }
 
-function overtakeScoreFromTags(edge: GraphEdge): number {
+export function overtakeScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.4;
 
@@ -139,7 +139,7 @@ function overtakeScoreFromTags(edge: GraphEdge): number {
   return 0.4;
 }
 
-function shadeScoreFromTags(edge: GraphEdge): number {
+export function shadeScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.2;
 
@@ -149,7 +149,7 @@ function shadeScoreFromTags(edge: GraphEdge): number {
   return 0.2;
 }
 
-function vegetationNoiseScoreFromTags(edge: GraphEdge): number {
+export function vegetationNoiseScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.3;
 
@@ -160,7 +160,7 @@ function vegetationNoiseScoreFromTags(edge: GraphEdge): number {
   return 0.3;
 }
 
-function lightShadowScoreFromTags(edge: GraphEdge): number {
+export function lightShadowScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.5;
 
@@ -175,7 +175,7 @@ function lightShadowScoreFromTags(edge: GraphEdge): number {
   return 0.5;
 }
 
-function seatingScoreFromTags(edge: GraphEdge): number {
+export function seatingScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.2;
 
@@ -183,7 +183,7 @@ function seatingScoreFromTags(edge: GraphEdge): number {
   return 0.2;
 }
 
-function shelterScoreFromTags(edge: GraphEdge): number {
+export function shelterScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.2;
 
@@ -191,7 +191,7 @@ function shelterScoreFromTags(edge: GraphEdge): number {
   return 0.2;
 }
 
-function safeCrossingScoreFromTags(edge: GraphEdge): number {
+export function safeCrossingScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.5;
 
@@ -204,7 +204,7 @@ function safeCrossingScoreFromTags(edge: GraphEdge): number {
   return 0.5;
 }
 
-function slopeScoreFromTags(edge: GraphEdge): number {
+export function slopeScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.7;
 
@@ -222,7 +222,7 @@ function slopeScoreFromTags(edge: GraphEdge): number {
   return 0.3;
 }
 
-function seasonalVegetationScoreFromTags(edge: GraphEdge): number {
+export function seasonalVegetationScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.4;
 
@@ -233,7 +233,7 @@ function seasonalVegetationScoreFromTags(edge: GraphEdge): number {
   return 0.4;
 }
 
-function viewWindowScoreFromTags(edge: GraphEdge): number {
+export function viewWindowScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.4;
 
@@ -244,7 +244,7 @@ function viewWindowScoreFromTags(edge: GraphEdge): number {
   return 0.4;
 }
 
-function difficultyScoreFromTags(edge: GraphEdge): number {
+export function difficultyScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.7;
 
@@ -272,7 +272,7 @@ function difficultyScoreFromTags(edge: GraphEdge): number {
   return 0.7;
 }
 
-function slipRiskScoreFromTags(edge: GraphEdge): number {
+export function slipRiskScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.6;
 

@@ -1,4 +1,63 @@
-<button (click)="runGreedy()">Greedy Best-First starten</button>
-<button (click)="runBeam()">Beam Search starten</button>
-<button (click)="runSA()">Simulated Annealing starten</button>
-  <app-map [route]="currentRoute" [anchorNode]="currentAnchorNode" [startNode]="currentStartNode"></app-map>
+<div class="layout-container">
+
+  <header class="app-header">
+    <div class="brand-section">
+      <h1>🚶 Spaziergang</h1>
+      <span class="subtitle">Wähle deine Strategie</span>
+    </div>
+    <div class="algorithm-nav">
+
+      <button (click)="runGreedy()" class="btn btn-secondary">
+        <span class="icon">⚡</span>
+        <div class="btn-content">
+          <span class="btn-title">Greedy</span>
+        </div>
+      </button>
+
+      <button (click)="runBeam()" class="btn btn-secondary">
+        <span class="icon">🔦</span>
+        <div class="btn-content">
+          <span class="btn-title">Beam</span>
+        </div>
+      </button>
+
+      <div class="separator"></div>
+
+      <button (click)="runSA()"  class="btn btn-secondary">
+        <span class="icon">🎯</span>
+        <div class="btn-content">
+          <span class="btn-title">Simulated Annealing</span>
+        </div>
+      </button>
+
+      <button (click)="runACO()" class="btn btn-secondary">
+        <span class="icon">🎲</span>
+        <div class="btn-content">
+          <span class="btn-title">Ant Colony Optimization</span>
+        </div>
+      </button>
+
+
+      <div class="separator"></div>
+
+      <button (click)="runRoundDijkstra()" class="btn btn-secondary">
+        <span class="icon">🔄</span>
+        <div class="btn-content">
+          <span class="btn-title">Dijkstra</span>
+        </div>
+      </button>
+
+      <button (click)="runRoundAStar()" class="btn btn-secondary">
+        <span class="icon">⭐</span>
+        <div class="btn-content">
+          <span class="btn-title">A* Runde</span>
+        </div>
+      </button>
+    </div>
+  </header>
+
+  <div class="map-wrapper">
+    <app-map [route]="currentRoute" [startNode]="currentStartNode"></app-map>
+  </div>
+
+</div>
