@@ -1,8 +1,6 @@
 import {AfterViewInit, Component, ElementRef, Input, OnChanges, SimpleChanges, ViewChild} from '@angular/core';
-import {AfterViewInit, Component, ElementRef, Input, OnChanges, SimpleChanges, ViewChild} from '@angular/core';
 import {RouteResult} from '../../core/models/route.model';
 import * as L from 'leaflet';
-import {GraphNode} from '../../core/models/graph.model';
 import {GraphNode} from '../../core/models/graph.model';
 
 @Component({
@@ -26,9 +24,6 @@ export class Map implements AfterViewInit, OnChanges {
   // NEU: Layer für die Marker
   private startLayer?: L.CircleMarker;
   private routeLayer?: L.Polyline;
-
-  // NEU: Layer für die Marker
-  private startLayer?: L.CircleMarker;
   private anchorLayer?: L.CircleMarker;
 
   ngAfterViewInit(): void {
@@ -40,11 +35,6 @@ export class Map implements AfterViewInit, OnChanges {
     if (this.map) {
       this.updateView();
     this.updateView();
-  }
-
-  ngOnChanges(changes: SimpleChanges): void {
-    if (this.map) {
-      this.updateView();
     }
   }
 
@@ -67,8 +57,6 @@ export class Map implements AfterViewInit, OnChanges {
     }).addTo(this.map);
   }
 
-  private updateView(): void {
-    // 1. Route zeichnen
   private updateView(): void {
     // 1. Route zeichnen
     if (this.routeLayer) {
@@ -129,4 +117,5 @@ export class Map implements AfterViewInit, OnChanges {
       this.anchorLayer.bringToFront();
     }
   }
+}
 }
