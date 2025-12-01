@@ -34,7 +34,6 @@ export class Map implements AfterViewInit, OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (this.map) {
       this.updateView();
-    this.updateView();
     }
   }
 
@@ -61,13 +60,9 @@ export class Map implements AfterViewInit, OnChanges {
     // 1. Route zeichnen
     if (this.routeLayer) {
       this.map.removeLayer(this.routeLayer);
+      this.routeLayer = undefined;
     }
-    if (this.route) {
-      this.routeLayer = L.polyline(this.route.polyline, {
-        weight: 5,
-        opacity: 0.8,
-        color: 'blue',
-      }).addTo(this.map);
+
     if (this.route) {
       this.routeLayer = L.polyline(this.route.polyline, {
         weight: 5,
@@ -84,14 +79,14 @@ export class Map implements AfterViewInit, OnChanges {
     // 2. Startpunkt zeichnen
     if (this.startLayer) {
       this.map.removeLayer(this.startLayer);
+      this.startLayer = undefined;
     }
-    console.log(this.startNode);
-    console.log(this.anchorNode);
+
     if (this.startNode) {
       this.startLayer = L.circleMarker([this.startNode.lat, this.startNode.lon], {
         color: 'white',       // Weißer Rand für Kontrast
         weight: 3,            // Randbreite
-        fillColor: '#0095ff',    // Leuchtendes Grün innen
+        fillColor: '#0f0',    // Leuchtendes Grün innen
         fillOpacity: 1,
         radius: 8
       }).addTo(this.map).bindPopup("Start");
@@ -103,7 +98,9 @@ export class Map implements AfterViewInit, OnChanges {
     // 3. Ankerpunkt zeichnen
     if (this.anchorLayer) {
       this.map.removeLayer(this.anchorLayer);
+      this.anchorLayer = undefined;
     }
+
     if (this.anchorNode) {
       this.anchorLayer = L.circleMarker([this.anchorNode.lat, this.anchorNode.lon], {
         color: 'white',       // Weißer Rand
@@ -117,5 +114,4 @@ export class Map implements AfterViewInit, OnChanges {
       this.anchorLayer.bringToFront();
     }
   }
-}
 }
