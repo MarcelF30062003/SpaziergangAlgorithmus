@@ -35,7 +35,7 @@ export class OsmService {
       '["highway"~"footway|path|cycleway|residential|living_street|track|service|pedestrian"]';
 
     return `
-      [out:json][timeout:25];
+      [out:json][timeout:4000];
       (
         way${highwayFilter}(around:${radius},${lat},${lon});
       );
