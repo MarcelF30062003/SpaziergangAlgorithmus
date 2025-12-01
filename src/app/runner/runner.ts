@@ -41,7 +41,19 @@ export class Runner {
     private acoRunner: AntColonyOptimizationRunner
   ) {}
 
+  /**
+   * Setzt die aktuelle Ansicht zurück.
+   * Dies entfernt die Route und Marker von der Karte,
+   * da die Map-Komponente auf null-Werte reagiert.
+   */
+  private resetView() {
+    this.currentRoute = null;
+    this.currentStartNode = null;
+  }
+
   runGreedy() {
+    this.resetView();
+
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
     const desiredDistance = 3000;
@@ -61,6 +73,8 @@ export class Runner {
   }
 
   runBeam() {
+    this.resetView();
+
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
     const desiredDistance = 3000;
@@ -86,6 +100,8 @@ export class Runner {
   }
 
   runSA() {
+    this.resetView();
+
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
     const desiredDistance = 3000;
@@ -161,6 +177,8 @@ export class Runner {
   }
 
   runACO() {
+    this.resetView();
+
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
     const desiredDistance = 3000;
@@ -199,6 +217,8 @@ export class Runner {
   }
 
   runRoundDijkstra() {
+    this.resetView();
+
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
     const desiredDistance = 8000;
@@ -217,6 +237,8 @@ export class Runner {
   }
 
   runRoundAStar() {
+    this.resetView();
+
     const matrix = this.weightMatrixService.getDefault();
     const weights = this.weightMatrixService.cloneWeights(matrix.weights);
     const desiredDistance = 8000;
