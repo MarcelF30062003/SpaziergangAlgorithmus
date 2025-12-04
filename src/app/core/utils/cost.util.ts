@@ -1,9 +1,17 @@
-// core/utils/cost.util.ts
+// src/app/core/utils/cost.util.ts
 
 import { GraphEdge } from '../models/graph.model';
-import {getTag, hasTag} from './tag.utils';
-import {WeightConfig} from '../models/weight.model';
+import { WeightConfig } from '../models/weight.model';
 import { RouteMetrics } from '../models/route.model';
+
+// Nur die Basisfunktionen aus tag.utils importieren
+import {
+  getTag,
+  hasTag,
+  estimateShade,
+  estimateSafety,
+  estimateVegetationNoiseDampening
+} from './tag.utils';
 
 /**
  * Basis-Kostenfunktion, die eure Bewertungsmatrix verwendet.
@@ -17,7 +25,6 @@ export function edgeBaseCost(edge: GraphEdge, weights: WeightConfig): number {
   cost += d;
 
   // Kosten = (1 - Score) * Gewicht * Distanz
-  // Je höher der Score (Qualität), desto geringer die Kosten
   cost += (1 - pedestrianFriendlyScore(edge)) * weights.pedestrianFriendly * d;
   cost += (1 - pathWidthScore(edge)) * weights.pathWidth * d;
   cost += (1 - curvatureScorePlaceholder(edge)) * weights.pathCurvature * d;
@@ -82,7 +89,6 @@ export function edgeQualityScore(edge: GraphEdge, weights: WeightConfig): number
 export function calculateRouteQuality(edges: GraphEdge[], weights: WeightConfig): number {
   if (!edges || edges.length === 0) return 0;
   let sum = 0;
-  // Hier könnte man auch längengewichtet vorgehen, aber einfache Mittelung der Scores reicht oft
   for (const edge of edges) {
     sum += edgeQualityScore(edge, weights);
   }
@@ -161,11 +167,14 @@ export function calculateRouteMetrics(edges: GraphEdge[]): RouteMetrics {
       litDist += d;
     }
 
-    // Grünanteil
+    // --- GRÜNANTEIL (STATISTIK) ---
+    // Jetzt inklusive Prüfung auf Kontext-Tags ("is_inside_green")
     const isGreen =
       hasTag(edge.tags, 'leisure', ['park', 'garden']) ||
-      hasTag(edge.tags, 'landuse', ['forest', 'grass', 'meadow']) ||
-      hasTag(edge.tags, 'natural', ['wood', 'tree_row']);
+      hasTag(edge.tags, 'landuse', ['forest', 'grass', 'meadow', 'recreation_ground']) ||
+      hasTag(edge.tags, 'natural', ['wood', 'tree_row', 'scrub', 'heath']) ||
+      edge.tags['is_inside_green'] === 'yes';
+
     if (isGreen) {
       greeneryDist += d;
     }
@@ -259,29 +268,34 @@ export function overtakeScoreFromTags(edge: GraphEdge): number {
   return 0.4;
 }
 
+/**
+ * Schatten-Score. Nutzt den Helper aus tag.utils.
+ */
 export function shadeScoreFromTags(edge: GraphEdge): number {
-  const tags = edge.tags;
-  if (!tags) return 0.2;
-  if (hasTag(tags, 'natural', ['wood'])) return 1.0;
-  if (hasTag(tags, 'landuse', ['forest'])) return 0.9;
-  if (hasTag(tags, 'natural', ['tree'])) return 0.7;
-  return 0.2;
+  if (edge.shade !== undefined) return edge.shade;
+  return estimateShade(edge.tags);
 }
 
+/**
+ * Lärmschutz-Score. Nutzt den neuen Helper aus tag.utils.
+ */
 export function vegetationNoiseScoreFromTags(edge: GraphEdge): number {
-  const tags = edge.tags;
-  if (!tags) return 0.3;
-  if (hasTag(tags, 'landuse', ['forest']) || hasTag(tags, 'natural', ['wood'])) return 0.9;
-  if (hasTag(tags, 'natural', ['tree'])) return 0.6;
-  return 0.3;
+  return estimateVegetationNoiseDampening(edge.tags);
 }
 
 export function lightShadowScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.5;
+
+  if (tags['is_inside_green'] === 'yes' || hasTag(tags, 'natural', ['tree', 'wood'])) {
+    if (hasTag(tags, 'building')) return 0.9;
+    return 0.8;
+  }
+
   const hasTrees = hasTag(tags, 'natural', ['tree', 'wood']);
   const hasBuildings = hasTag(tags, 'building');
   const hasLanduse = hasTag(tags, 'landuse');
+
   if (hasTrees && hasBuildings) return 1.0;
   if (hasTrees && hasLanduse) return 0.8;
   if (hasTrees) return 0.7;
@@ -292,6 +306,7 @@ export function seatingScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.2;
   if (hasTag(tags, 'amenity', ['bench'])) return 1.0;
+  if (tags['context_leisure'] === 'park' || tags['context_leisure'] === 'garden') return 0.6;
   return 0.2;
 }
 
@@ -303,14 +318,8 @@ export function shelterScoreFromTags(edge: GraphEdge): number {
 }
 
 export function safeCrossingScoreFromTags(edge: GraphEdge): number {
-  const tags = edge.tags;
-  if (!tags) return 0.5;
-  if (hasTag(tags, 'highway', ['crossing'])) {
-    if (hasTag(tags, 'crossing', ['traffic_signals'])) return 1.0;
-    if (hasTag(tags, 'crossing', ['island'])) return 0.8;
-    return 0.7;
-  }
-  return 0.5;
+  if (edge.safety !== undefined) return edge.safety;
+  return estimateSafety(edge.tags);
 }
 
 export function slopeScoreFromTags(edge: GraphEdge): number {
@@ -331,7 +340,13 @@ export function seasonalVegetationScoreFromTags(edge: GraphEdge): number {
   const tags = edge.tags;
   if (!tags) return 0.4;
   if (hasTag(tags, 'leaf_cycle', ['deciduous'])) return 1.0;
-  if (hasTag(tags, 'natural', ['tree', 'wood']) || hasTag(tags, 'landuse', ['forest'])) return 0.7;
+
+  // Kontext-Bonus
+  if (hasTag(tags, 'context_landuse', ['forest']) || hasTag(tags, 'landuse', ['forest'])) {
+    return 0.9;
+  }
+
+  if (hasTag(tags, 'natural', ['tree', 'wood']) || hasTag(tags, 'context_leisure', ['park'])) return 0.8;
   return 0.4;
 }
 
@@ -340,6 +355,7 @@ export function viewWindowScoreFromTags(edge: GraphEdge): number {
   if (!tags) return 0.4;
   if (hasTag(tags, 'tourism', ['viewpoint']) || hasTag(tags, 'viewpoint')) return 1.0;
   if (hasTag(tags, 'natural', ['peak', 'cliff'])) return 0.8;
+  if (hasTag(tags, 'context_natural', ['water', 'coastline'])) return 0.9;
   return 0.4;
 }
 

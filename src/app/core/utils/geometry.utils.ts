@@ -1,10 +1,7 @@
-// core/utils/geometry.util.ts
+// src/app/core/utils/geometry.utils.ts
 
 import { GraphNode } from '../models/graph.model';
 
-/**
- * Haversine-Distanz in Metern.
- */
 export function haversineDistance(
   lat1: number,
   lon1: number,
@@ -33,10 +30,6 @@ export function distanceBetweenNodes(a: GraphNode, b: GraphNode): number {
   return haversineDistance(a.lat, a.lon, b.lat, b.lon);
 }
 
-/**
- * Einfache Steigungsberechnung in %.
- * Erwartet Höhen in Metern, falls ihr ele-Tags habt.
- */
 export function slopePercent(
   elevationFrom: number,
   elevationTo: number,
@@ -45,4 +38,22 @@ export function slopePercent(
   if (distanceMeters === 0) return 0;
   const diff = elevationTo - elevationFrom;
   return (diff / distanceMeters) * 100;
+}
+
+// --- NEU: Wichtig für die Park-Erkennung ---
+/**
+ * Prüft, ob ein Punkt (lat/lon) innerhalb eines Polygons liegt.
+ * Ray-Casting Algorithmus.
+ */
+export function isPointInPolygon(lat: number, lon: number, polygon: {lat: number, lon: number}[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lat, yi = polygon[i].lon;
+    const xj = polygon[j].lat, yj = polygon[j].lon;
+
+    const intersect = ((yi > lon) !== (yj > lon))
+      && (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
 }
