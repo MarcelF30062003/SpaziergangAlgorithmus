@@ -1,4 +1,4 @@
-// core/algorithms/heuristic/greedy-best-first.runner.ts
+// src/app/algorithms/heuristic/greedy-best-first.ts
 
 import { Injectable } from '@angular/core';
 import { WeightConfig } from '../../core/models/weight.model';
@@ -8,27 +8,32 @@ import { distanceBetweenNodes } from '../../core/utils/geometry.utils';
 import { edgeBaseCost } from '../../core/utils/cost.util';
 import { AlgorithmRunner } from '../../core/models/algorithm-runner.model';
 
-interface OpenEntry {
+/**
+ * Eintrag in der Open-List.
+ * Speichert den Zustand eines Pfades, um Backtracking zu ermöglichen.
+ */
+interface SearchNode {
   nodeId: string;
-  score: number; // Heuristik + Penalty
+  edgeFromParent: GraphEdge | null;
+  parentNodeId: string | null;
+  g: number;      // Bisher zurückgelegte Distanz (Meter)
+  score: number;  // Der "Attraktivitäts-Wert" (niedriger ist besser)
 }
 
 /**
- * Greedy Best-First Search (Optimiert für Rundwege):
- * - Bei A -> B: Nutzt Heuristik h(n) zum Ziel.
- * - Bei A -> A (Rundweg): Generiert Wegpunkte und bestraft Rückwege extrem.
+ * Greedy Best-First Search (Robust & Organic):
+ * - Nutzt eine Open-List (Priority Queue ähnlich), um Sackgassen zu vermeiden.
+ * - Bevorzugt qualitativ hochwertige Wege (Schatten, ruhig).
+ * - Bestraft Rückwege extrem.
+ * - Achtet auf das Distanz-Budget.
  */
 @Injectable({
   providedIn: 'root',
 })
 export class GreedyBestFirstRunner implements AlgorithmRunner {
   id = 'greedy_best_first';
-  name = 'Greedy Best-First Search (Roundtrip Optimized)';
+  name = 'Greedy Best-First (Smart)';
 
-  /**
-   * Haupteinstiegspunkt.
-   * Unterscheidet automatisch zwischen einfachem Weg und Rundweg.
-   */
   run(
     graph: Graph,
     startId: string,
@@ -43,97 +48,97 @@ export class GreedyBestFirstRunner implements AlgorithmRunner {
       return null;
     }
 
-    // Fall 1: Rundweg gewünscht (Start == Ziel)
+    // Fall 1: Rundweg (Start == Ziel)
     if (startId === targetId) {
-      const defaultDistance = 3000; // 3km Standard, falls keine Distanz UI vorhanden ist
+      const defaultDistance = 3000;
       return this.generateRoundTrip(graph, startId, defaultDistance, weights);
     }
 
-    // Fall 2: Normaler Weg A -> B
-    // Wir übergeben ein leeres Set, da es keine verbotenen Straßen gibt.
-    return this.runSegment(graph, startId, targetId, weights, new Set<string>());
+    // Fall 2: Einfacher Weg A -> B
+    // Budget: Wir erlauben max 20% Umweg für schöne Strecken
+    const airDist = distanceBetweenNodes(startNode, targetNode);
+    const maxDist = airDist * 1.2; 
+    
+    return this.runSegment(graph, startId, targetId, weights, new Set<string>(), maxDist);
   }
 
   /**
-   * Erstellt einen Rundweg in Dreiecksform und verhindert, 
-   * dass der Algorithmus den gleichen Weg zurückläuft.
+   * Generiert einen Rundweg über 3 Segmente (Dreieck), um Hin- und Rückweg zu trennen.
    */
   public generateRoundTrip(
     graph: Graph,
     startId: string,
-    approxDistanceMeters: number,
+    targetDistanceMeters: number,
     weights: WeightConfig
   ): RouteResult | null {
     const startNode = graph.nodes[startId];
     
-    // 1. ZWISCHENZIELE FINDEN
-    // Wir teilen die Distanz durch 3 (Start -> A -> B -> Start)
-    const segmentDist = approxDistanceMeters / 3;
+    // 1. ZWISCHENZIELE
+    // Wir teilen durch ~3.3. Das sorgt dafür, dass die Luftlinie etwas kürzer ist 
+    // als der tatsächliche Weg (Faktor ~1.3 Kurvigkeit), damit wir die Zieldistanz treffen.
+    const segmentAirDistance = targetDistanceMeters / 3.3;
 
-    // Punkt A finden (zufällig in passender Entfernung)
-    const waypoint1 = this.findRandomNodeAtDistance(graph, startNode, segmentDist);
-    if (!waypoint1) {
-        console.warn('Konnte keinen ersten Wegpunkt finden.');
-        return null;
-    }
+    // Punkt A finden
+    const waypoint1 = this.findRandomNodeAtDistance(graph, startNode, segmentAirDistance);
+    if (!waypoint1) return null;
 
-    // Punkt B finden (muss weit weg von Start UND weit weg von Punkt A sein)
-    // Das 'avoidNode' Argument sorgt für die Dreiecksform.
-    let waypoint2 = this.findRandomNodeAtDistance(graph, startNode, segmentDist, waypoint1);
-    
-    // Fallback: Falls kein perfektes Dreieck möglich ist, nimm irgendeinen Punkt
+    // Punkt B finden (Dreiecks-Form erzwingen durch 'avoidNode')
+    let waypoint2 = this.findRandomNodeAtDistance(graph, startNode, segmentAirDistance, waypoint1);
     if (!waypoint2) {
-        waypoint2 = this.findRandomNodeAtDistance(graph, startNode, segmentDist);
+        // Fallback ohne Avoidance
+        waypoint2 = this.findRandomNodeAtDistance(graph, startNode, segmentAirDistance);
     }
     if (!waypoint2) return null;
 
-    // Die Route: Start -> W1 -> W2 -> Start
     const targets = [waypoint1.id, waypoint2.id, startId];
     
-    // Sammel-Variablen für das Endergebnis
+    // Speicher
     let combinedNodes: GraphNode[] = [];
     let combinedEdges: GraphEdge[] = [];
     let totalCost = 0;
     
-    // GEDÄCHTNIS: Hier speichern wir alle Straßen, die wir schon gelaufen sind.
+    // Globale Blacklist für bereits genutzte Straßen
     const visitedEdgeSignatures = new Set<string>();
 
     let currentStart = startId;
+    
+    // Budget pro Segment (etwas Puffer für Varianz)
+    const segmentBudget = (targetDistanceMeters / 3) * 1.15; 
 
     // 2. SEGMENTE BERECHNEN
     for (const target of targets) {
-      // Segment berechnen mit "Gedächtnis" (visitedEdgeSignatures)
-      const result = this.runSegment(graph, currentStart, target, weights, visitedEdgeSignatures);
+      const result = this.runSegment(
+        graph, 
+        currentStart, 
+        target, 
+        weights, 
+        visitedEdgeSignatures,
+        segmentBudget
+      );
 
       if (!result) {
-        console.warn(`Kein Weg gefunden von ${currentStart} nach ${target}`);
-        // Wenn ein Teilstück fehlt, ist der ganze Rundweg kaputt
+        console.warn(`Greedy: Konnte Segment von ${currentStart} nach ${target} nicht finden.`);
         return null; 
       }
 
-      // Gefundene Straßen zur "Blacklist" hinzufügen
+      // Benutzte Kanten sperren (für den Rückweg)
       for (const edge of result.edges) {
         const sig = this.getEdgeSignature(edge);
         visitedEdgeSignatures.add(sig);
       }
 
-      // Ergebnis zusammenfügen
-      // (Beim Mergen darauf achten, dass Knoten an Schnittstellen nicht doppelt sind)
+      // Zusammenfügen
       if (combinedNodes.length === 0) {
         combinedNodes = [...result.nodes];
       } else {
-        // Den ersten Knoten weglassen, da er identisch mit dem letzten des vorigen Segments ist
         combinedNodes = [...combinedNodes, ...result.nodes.slice(1)];
       }
       
       combinedEdges = [...combinedEdges, ...result.edges];
       totalCost += result.totalCost;
-
-      // Das Ziel dieses Segments ist der Start des nächsten
       currentStart = target;
     }
 
-    // Polyline für die Karte generieren
     const polyline: [number, number][] = combinedNodes.map(n => [n.lat, n.lon]);
 
     return {
@@ -145,167 +150,173 @@ export class GreedyBestFirstRunner implements AlgorithmRunner {
   }
 
   /**
-   * Der Kern-Algorithmus: Greedy Search mit Penalty-Logik.
+   * Kern-Logik: Robuste Suche mit Open-List.
+   * Verbindet Greedy-Heuristik mit Qualitätskosten und Distanz-Limit.
    */
   private runSegment(
     graph: Graph,
     startId: string,
     targetId: string,
     weights: WeightConfig,
-    visitedEdges: Set<string>
+    visitedEdgesGlobal: Set<string>,
+    distanceLimit: number
   ): RouteResult | null {
-    const startNode = graph.nodes[startId];
     const targetNode = graph.nodes[targetId];
 
-    const open: OpenEntry[] = [];
-    const visitedInSegment = new Set<string>();
-    const cameFrom: Record<string, GraphEdge | undefined> = {};
+    // Open List für Kandidaten
+    const openList: SearchNode[] = [];
+    // Closed Set für besuchte Knoten (innerhalb dieses Segments)
+    const closedSet = new Set<string>();
+    
+    // Map für Rekonstruktion
+    const cameFromMap = new Map<string, { edge: GraphEdge, parent: string }>();
 
-    // Initialisierung
-    open.push({
+    // Startknoten
+    openList.push({
       nodeId: startId,
-      score: this.heuristic(startNode, targetNode)
+      edgeFromParent: null,
+      parentNodeId: null,
+      g: 0,
+      score: 0
     });
 
-    while (open.length > 0) {
-      // Sortieren: Kleinster Score zuerst (Greedy)
-      open.sort((a, b) => a.score - b.score);
-      const current = open.shift()!;
-      const currentId = current.nodeId;
+    const MAX_ITERATIONS = 5000; // Schutz vor Endlosschleifen
+    let iterations = 0;
 
-      // Ziel erreicht
-      if (currentId === targetId) {
-        return this.buildRouteResult(graph, startId, targetId, cameFrom, weights);
+    while (openList.length > 0 && iterations < MAX_ITERATIONS) {
+      iterations++;
+
+      // 1. Sortieren und Stochastic Pick
+      // Wir sortieren nach Score aufsteigend.
+      openList.sort((a, b) => a.score - b.score);
+
+      // "Organic Feel": Wir nehmen zufällig einen der Top 3 Kandidaten.
+      // Das verhindert Roboter-Linien, behält aber die Richtung bei.
+      // Wenn wir nah am Limit sind, nehmen wir strikt den Besten (Index 0).
+      let selectedIndex = 0;
+      const topCount = Math.min(openList.length, 3);
+      
+      // Nur variieren, wenn wir noch Puffer haben. Wenn es eng wird, strikt optimieren.
+      const bestNode = openList[0];
+      const distToTarget = distanceBetweenNodes(graph.nodes[bestNode.nodeId], targetNode);
+      const isCritical = (bestNode.g + distToTarget) > (distanceLimit * 0.95);
+
+      if (!isCritical && topCount > 1) {
+        selectedIndex = Math.floor(Math.random() * topCount);
       }
 
-      if (visitedInSegment.has(currentId)) continue;
-      visitedInSegment.add(currentId);
+      // Element entfernen
+      const current = openList.splice(selectedIndex, 1)[0];
+      
+      // Wenn schon besucht (über einen besseren/anderen Weg), überspringen
+      if (closedSet.has(current.nodeId)) continue;
+      closedSet.add(current.nodeId);
 
-      const neighbors = graph.adjacency[currentId] || [];
+      // Mapping speichern (für Pfad-Rekonstruktion)
+      if (current.edgeFromParent && current.parentNodeId) {
+        cameFromMap.set(current.nodeId, { edge: current.edgeFromParent, parent: current.parentNodeId });
+      }
 
-      for (const edge of neighbors) {
+      // Ziel erreicht?
+      if (current.nodeId === targetId) {
+        return this.reconstructPath(graph, startId, targetId, cameFromMap, weights);
+      }
+
+      // Nachbarn expandieren
+      const edges = graph.adjacency[current.nodeId] || [];
+      for (const edge of edges) {
         const nextId = edge.to;
-        if (visitedInSegment.has(nextId)) continue;
+        if (closedSet.has(nextId)) continue;
 
         const nextNode = graph.nodes[nextId];
         if (!nextNode) continue;
 
-        // --- PENALTY CHECK ---
-        const sig = this.getEdgeSignature(edge);
-        const isAlreadyUsed = visitedEdges.has(sig);
-
-        // Basis-Heuristik (Luftlinie zum Ziel)
-        const h = this.heuristic(nextNode, targetNode);
+        // --- SCORE BERECHNUNG ---
         
-        // Berechnung des Scores
-        let score = h;
-
-        if (isAlreadyUsed) {
-            // MASSIVE Bestrafung: Wir tun so, als wäre dieser Weg 10.000km länger.
-            // Der Algorithmus nimmt diesen Weg nur, wenn es GAR KEINE andere Option gibt (Sackgasse).
-            score += 10000000; 
+        // 1. Heuristik (Luftlinie zum Ziel)
+        const h = distanceBetweenNodes(nextNode, targetNode);
+        
+        // 2. Distanz-Check (g = bisher gelaufen)
+        const newG = current.g + edge.distance;
+        
+        // Soft-Limit: Wenn wir das Budget überschreiten, explodieren die Kosten.
+        // Das zwingt den Algo, SOFORT den kürzesten Weg zum Ziel zu suchen (h minimieren).
+        let limitPenalty = 0;
+        if ((newG + h) > distanceLimit) {
+           // Wir sind drüber! 
+           // Faktor 10 auf alles außer h -> Der Algo wird zum reinen Distance-Greedy
+           limitPenalty = 10000; 
         }
 
-        // Wir fügen den Nachbarn zur Open List hinzu
-        // (Bei Greedy ist es oft okay, Duplikate in Open zu haben, solange wir visited prüfen)
-        cameFrom[nextId] = edge;
-        open.push({ nodeId: nextId, score: score });
+        // 3. Qualitäts-Kosten (Schatten, Lärm, etc.)
+        // edgeBaseCost liefert hohe Werte für schlechte Wege.
+        const qualityCost = edgeBaseCost(edge, weights);
+
+        // 4. Global Visited Penalty (Rückweg vermeiden)
+        let visitedPenalty = 0;
+        const sig = this.getEdgeSignature(edge);
+        if (visitedEdgesGlobal.has(sig)) {
+            // Extrem hohe Strafe, aber nicht "unendlich", damit Sackgassen lösbar bleiben
+            visitedPenalty = 50000; 
+        }
+
+        // Gesamter Score:
+        // Wir gewichten Quality mit Faktor 4, damit er Umwege in Kauf nimmt.
+        // Aber wenn das Limit erreicht ist, dominiert 'limitPenalty'.
+        const score = h + (qualityCost * 4.0) + visitedPenalty + limitPenalty;
+
+        openList.push({
+          nodeId: nextId,
+          edgeFromParent: edge,
+          parentNodeId: current.nodeId,
+          g: newG,
+          score: score
+        });
       }
     }
 
+    // Wenn Liste leer oder Timeout -> Kein Weg gefunden
     return null;
   }
 
-  // --- HILFSFUNKTIONEN ---
-
-  private heuristic(a: GraphNode, b: GraphNode): number {
-    return distanceBetweenNodes(a, b);
-  }
-
-  /**
-   * Generiert eine eindeutige ID für eine Kante, unabhängig von der Richtung.
-   * A->B bekommt den gleichen String wie B->A.
-   */
-  private getEdgeSignature(edge: GraphEdge): string {
-      return [edge.from, edge.to].sort().join('-');
-  }
-
-  /**
-   * Sucht zufälligen Knoten im Radius.
-   * @param avoidNode Wenn gesetzt, muss der gefundene Punkt Abstand zu diesem Node haben.
-   */
-  private findRandomNodeAtDistance(
-      graph: Graph, 
-      startNode: GraphNode, 
-      targetDist: number, 
-      avoidNode?: GraphNode
-  ): GraphNode | null {
-    const candidates: GraphNode[] = [];
-    const minD = targetDist * 0.6; // Größere Toleranz für bessere Ergebnisse
-    const maxD = targetDist * 1.4;
-
-    // Iteration über alle Knoten (Achtung: Performance bei sehr großen Graphen!)
-    for (const key in graph.nodes) {
-        const node = graph.nodes[key];
-        const d = distanceBetweenNodes(startNode, node);
-        
-        if (d >= minD && d <= maxD) {
-            // Geometrie-Check: Dreieck aufspannen
-            if (avoidNode) {
-                const distToAvoid = distanceBetweenNodes(node, avoidNode);
-                // Der neue Punkt sollte mindestens 50% der Segmentlänge vom anderen Punkt entfernt sein
-                if (distToAvoid < targetDist * 0.5) {
-                    continue; 
-                }
-            }
-            candidates.push(node);
-        }
-    }
-
-    if (candidates.length === 0) return null;
-    return candidates[Math.floor(Math.random() * candidates.length)];
-  }
-
-  private buildRouteResult(
+  private reconstructPath(
     graph: Graph,
     startId: string,
     targetId: string,
-    cameFrom: Record<string, GraphEdge | undefined>,
+    cameFrom: Map<string, { edge: GraphEdge, parent: string }>,
     weights: WeightConfig
-  ): RouteResult | null {
-    const pathEdges: GraphEdge[] = [];
+  ): RouteResult {
     const pathNodes: GraphNode[] = [];
-    let currentId: string | undefined = targetId;
+    const pathEdges: GraphEdge[] = [];
+    
+    let curr: string | undefined = targetId;
+    
+    // Vom Ziel rückwärts zum Start
+    while (curr && curr !== startId) {
+      const entry = cameFrom.get(curr);
+      if (!entry) break; // Sollte nicht passieren
 
-    // Rückwärts rekonstruieren
-    while (currentId && currentId !== startId) {
-      // TYPE FIX: Explizite Typisierung verhindert den TS7022 Fehler
-      const edge: GraphEdge | undefined = cameFrom[currentId];
-      
-      if (!edge) {
-        console.warn('Pfad unterbrochen bei Rekonstruktion');
-        return null;
-      }
-      pathEdges.push(edge);
-      currentId = edge.from;
+      pathEdges.push(entry.edge);
+      pathNodes.push(graph.nodes[curr]);
+      curr = entry.parent;
     }
 
+    // Startknoten hinzufügen
     if (graph.nodes[startId]) {
-        pathNodes.push(graph.nodes[startId]);
+      pathNodes.push(graph.nodes[startId]);
     }
 
+    // Umdrehen (Start -> Ziel)
+    pathNodes.reverse();
     pathEdges.reverse();
 
-    for (const edge of pathEdges) {
-      const node = graph.nodes[edge.to];
-      if (node) pathNodes.push(node);
-    }
-
-    const polyline: [number, number][] = pathNodes.map((n) => [n.lat, n.lon]);
-
+    const polyline: [number, number][] = pathNodes.map(n => [n.lat, n.lon]);
+    
     let totalCost = 0;
+    let totalDist = 0;
     for (const e of pathEdges) {
       totalCost += edgeBaseCost(e, weights);
+      totalDist += e.distance;
     }
 
     return {
@@ -313,6 +324,41 @@ export class GreedyBestFirstRunner implements AlgorithmRunner {
       edges: pathEdges,
       polyline,
       totalCost,
+      totalDistance: totalDist
     };
+  }
+
+  // --- Hilfsfunktionen ---
+
+  private getEdgeSignature(edge: GraphEdge): string {
+      return [edge.from, edge.to].sort().join('-');
+  }
+
+  private findRandomNodeAtDistance(
+      graph: Graph, 
+      startNode: GraphNode, 
+      targetDist: number, 
+      avoidNode?: GraphNode
+  ): GraphNode | null {
+    const candidates: GraphNode[] = [];
+    const minD = targetDist * 0.7; 
+    const maxD = targetDist * 1.3;
+
+    for (const key in graph.nodes) {
+        const node = graph.nodes[key];
+        const d = distanceBetweenNodes(startNode, node);
+        
+        if (d >= minD && d <= maxD) {
+            if (avoidNode) {
+                const distToAvoid = distanceBetweenNodes(node, avoidNode);
+                // Dreieck: Punkte müssen voneinander entfernt sein
+                if (distToAvoid < targetDist * 0.6) continue; 
+            }
+            candidates.push(node);
+        }
+    }
+
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
   }
 }
