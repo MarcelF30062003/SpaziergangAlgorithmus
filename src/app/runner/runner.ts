@@ -38,7 +38,16 @@ export class Runner {
   currentStartNode: GraphNode | null = null;
   currentQuality: number | null = null;
   desiredDistance: number = 3000;
-  params = {lat:  40.7829, lon: -73.9654, radius: this.desiredDistance};
+
+  //Central Park
+  //params = {lat:  40.7829, lon: -73.9654, radius: this.desiredDistance};
+
+  //Timesquare
+  params = {lat:  40.7580, lon: -73.9855, radius: this.desiredDistance};
+
+
+  //komplexes Wohngebiet
+  //params = {lat:  33.6051, lon: -112.2857, radius: this.desiredDistance};
 
   constructor(
     private osmService: OsmService,
