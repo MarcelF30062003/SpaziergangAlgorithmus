@@ -1,34 +1,16 @@
-// core/models/route.model.ts
+// src/app/core/models/route.model.ts
 
 import { GraphEdge, GraphNode } from './graph.model';
 
 export interface RouteMetrics {
-  totalDistance: number;        // Gesamtdistanz in Metern
+  totalDistance: number;
 
-  // --- Metriken passend zur WeightConfig (0.0 - 1.0) ---
+  // Die harten Fakten (0.0 - 1.0 Score)
   avgPedestrianFriendly: number;
   avgPathWidth: number;
-  avgPathCurvature: number;
-  avgOvertakeOptions: number;
-
-  avgTreeShade: number;
-  avgVegetationNoiseDampening: number;
-  avgLightShadow: number;
-  avgSeating: number;
-  avgShelter: number;
-
-  avgSafeCrossings: number;
-  avgMaxSlope: number;          // Score (1.0 = flach/gut, 0.0 = steil/schlecht)
-  avgSeasonalVegetation: number;
-  avgViewWindows: number;
-
-  avgDifficulty: number;        // Score (1.0 = leicht, 0.0 = schwer)
-  avgSlipRisk: number;          // Score (1.0 = sicher, 0.0 = rutschig)
-
-  // --- Zusätzliche Infos ---
-  litDistance: number;
-  litPercentage: number;
-  greeneryDistance: number;
+  avgDifficulty: number;
+  avgSlipRisk: number;
+  avgMaxSlope: number;
 }
 
 export interface RouteResult {

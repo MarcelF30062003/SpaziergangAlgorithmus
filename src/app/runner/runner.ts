@@ -11,11 +11,10 @@ import {WeightMatrixService} from '../core/services/weight-matrix.service';
 import {GraphService} from '../core/services/graph.service';
 import {SimulatedAnnealingRunner} from '../algorithms/stochastic/simulated-annealing';
 import {GraphNode} from '../core/models/graph.model';
-import {AntColonyOptimizationRunner} from '../algorithms/stochastic/ant-colony-optimization';
 import {DijkstraRunner} from '../algorithms/classic/dijkstra';
 import {RoundPathService} from '../algorithms/classic/round-path.service';
 import {RoundAStarService} from '../algorithms/classic/round-astar.service';
-import {calculateRouteMetrics, calculateRouteQuality} from '../core/utils/cost.util';
+import {calculateRouteMetrics} from '../core/utils/cost.util';
 
 @Component({
   selector: 'app-runner',
@@ -40,11 +39,10 @@ export class Runner {
   desiredDistance: number = 3000;
 
   //Central Park
-  //params = {lat:  40.7829, lon: -73.9654, radius: this.desiredDistance};
+  params = {lat:  40.7829, lon: -73.9654, radius: this.desiredDistance};
 
   //Timesquare
-  params = {lat:  40.7580, lon: -73.9855, radius: this.desiredDistance};
-
+  //params = {lat:  40.7580, lon: -73.9855, radius: this.desiredDistance};
 
   //komplexes Wohngebiet
   //params = {lat:  33.6051, lon: -112.2857, radius: this.desiredDistance};
@@ -54,8 +52,7 @@ export class Runner {
     private weightMatrixService: WeightMatrixService,
     private greedyRunner: GreedyBestFirstRunner,
     private beamRunner: BeamSearchRunner,
-    private saRunner: SimulatedAnnealingRunner,
-    private acoRunner: AntColonyOptimizationRunner
+    private saRunner: SimulatedAnnealingRunner
   ) {}
 
   private resetView() {
@@ -64,52 +61,37 @@ export class Runner {
     this.currentQuality = null;
   }
 
+  // Ausschnitt aus runner.ts -> analyzeRoute Methode
+
   private analyzeRoute(route: RouteResult | null, algoName: string, weights: any) {
     if (!route) {
       console.warn(`[${algoName}] Keine Route gefunden.`);
       return;
     }
 
-    const quality = calculateRouteQuality(route.edges, weights);
-    const metrics = calculateRouteMetrics(route.edges);
+    // ACHTUNG: calculateRouteQuality in cost.util.ts muss nun auch angepasst sein,
+    // damit es nicht auf alte Felder zugreift! (Habe ich oben erledigt)
+    // Da wir calculateRouteQuality oben im cost.util nicht explizit gepostet haben,
+    // hier der Hinweis: Die Funktion nutzt 'edgeQualityScore', und das habe ich oben
+    // auf die neuen Felder umgestellt. Es passt also.
 
+    const metrics = calculateRouteMetrics(route.edges);
     route.metrics = metrics;
-    this.currentQuality = quality;
     this.currentRoute = route;
 
     console.group(`🏁 Ergebnis: ${algoName}`);
     console.log(`Gesamtdistanz: ${metrics.totalDistance} m`);
-    console.log(`Gesamtqualität (gewichtet): ${(quality * 100).toFixed(1)}%`);
 
     const pct = (val: number) => (val * 100).toFixed(1) + '%';
 
+    // Schlanke Tabelle
     console.table({
-      '--- 1. WEGBESCHAFFENHEIT ---': '',
-      'Fußgängerfreundlich': pct(metrics.avgPedestrianFriendly),
-      'Wegbreite': pct(metrics.avgPathWidth),
-      'Linienführung (Curvature)': pct(metrics.avgPathCurvature),
-      'Überholmöglichkeit': pct(metrics.avgOvertakeOptions),
-
-      '--- 2. ATMOSPHÄRE ---': '',
-      'Schatten (Baumdichte)': pct(metrics.avgTreeShade),
-      'Lärmschutz (Vegetation)': pct(metrics.avgVegetationNoiseDampening),
-      'Licht/Schatten-Spiel': pct(metrics.avgLightShadow),
-      'Sitzgelegenheiten': pct(metrics.avgSeating),
-      'Wetterschutz': pct(metrics.avgShelter),
-
-      '--- 3. SICHERHEIT & UMGEBUNG ---': '',
-      'Sichere Querungen': pct(metrics.avgSafeCrossings),
-      'Steigung (Flachheit)': pct(metrics.avgMaxSlope),
-      'Jahreszeitl. Veg.': pct(metrics.avgSeasonalVegetation),
-      'Blickfenster': pct(metrics.avgViewWindows),
-
-      '--- 4. ANSPRUCH ---': '',
+      '--- WEGQUALITÄT ---': '',
+      'Fußgängerfreundlichkeit': pct(metrics.avgPedestrianFriendly),
+      'Wegbreite (Score)': pct(metrics.avgPathWidth),
+      'Bodenbelag (Rutschfestigkeit)': pct(metrics.avgSlipRisk),
       'Schwierigkeit (Leichtigkeit)': pct(metrics.avgDifficulty),
-      'Rutschsicherheit': pct(metrics.avgSlipRisk),
-
-      '--- 5. STATISTIK ---': '',
-      'Beleuchtet (%)': metrics.litPercentage + '%',
-      'Weg im Grünen (m)': metrics.greeneryDistance
+      'Flachheit (Keine Steigung)': pct(metrics.avgMaxSlope),
     });
     console.groupEnd();
   }
@@ -227,43 +209,6 @@ export class Runner {
     });
   }
 
-  runACO() {
-    this.resetView();
-    const matrix = this.weightMatrixService.getDefault();
-    const weights = this.weightMatrixService.cloneWeights(matrix.weights);
-
-    this.osmService.fetchGraph(this.params).subscribe(graph => {
-      const startId = this.graphService.findNearestNode(graph, this.params.lat, this.params.lon);
-      if (!startId) return;
-
-      this.currentStartNode = graph.nodes[startId];
-
-      const anchorId = this.graphService.findAnchorNode(graph, startId, this.desiredDistance);
-      if (!anchorId) return;
-
-      const out = this.acoRunner.run(graph, startId, anchorId, weights);
-
-      const avoidEdges = new Set<string>();
-      if (out) {
-        out.edges.forEach(e => {
-          avoidEdges.add(e.id);
-          const parts = e.id.split('_');
-          if (parts.length === 3) {
-            const reverseId = `${parts[0]}_${parts[2]}_${parts[1]}`;
-            avoidEdges.add(reverseId);
-          }
-        });
-      }
-
-      const back = this.acoRunner.run(graph, anchorId, startId, weights, avoidEdges);
-
-      let res = null;
-      if (out && back) {
-        res = this.graphService.combineRoutes(out, back);
-      }
-      this.analyzeRoute(res, 'Ant Colony Optimization', weights);
-    });
-  }
 
   runRoundDijkstra() {
     this.resetView();
